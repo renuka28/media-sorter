@@ -1,0 +1,13 @@
+type,from,to,dirName
+recurringDay,12/24,,Christmas
+recurringDay,12/25,,Christmas
+recurringDay,12/31,,NewYearDay
+recurringDay,01/01,,NewYearDay
+recurringDay,01/14,,Sankranti
+recurringDay,01/15,,Sankranti
+recurringDay,01/12,,Wedding-Anniversary
+recurringDay,07/04,,USA-Independence-Day
+specialDay,2016/06/19,,Fathers-Day
+specialDay,2012/07/04,,Indoor-Golf
+specialDay,2011/02/04,,Dallas-Zoo
+specialDay,2019/01/11,,Mini-Golf
