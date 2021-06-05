@@ -6,11 +6,16 @@ from hachoir.parser import createParser
 from hachoir.metadata import extractMetadata
 from pathlib import Path
 
+# test source and target directories
 sourceDir = "S:\\Renuka\\Renuka-Data\\Personal\\learning\\python\\source\\test\\source"
 targetBaseDir = "S:\\Renuka\\Renuka-Data\\Personal\\learning\\python\\source\\test\\target"
+# default date format
 dateFormat = '%Y-%m-%d'
+# we will overwrite the target files by default
 overwriteFiles = True
+#supported image formats
 imgFormats = ['png', 'jpg', 'jpeg']
+#supported video formats
 videoFormats = ['m4v', 'mov', 'mp4']
 DATE_TIME_ORIG_TAG = 36867
 
@@ -23,6 +28,7 @@ def get_field (exif,field) :
      if TAGS.get(k) == field:
         return v
 
+# extracts dates from the media files. We retrive creation date, modification and date taken
 def get_dates(filePath, fileName):
     dates = {}
     # print(filePath)
@@ -30,6 +36,7 @@ def get_dates(filePath, fileName):
     dates["modification_date"]  = datetime.datetime.strptime(time.ctime(os.path.getmtime(filePath)), "%c")
     dates["date_taken"] = ""
    
+   # for supported image files lets extract exif information
     if fileName.split('.')[1].lower() in imgFormats:  
         try:
             with Image.open(filePath) as im:
@@ -38,7 +45,8 @@ def get_dates(filePath, fileName):
                     datestr = exif[DATE_TIME_ORIG_TAG]
                     dates["date_taken"]  = datetime.datetime.strptime(datestr, "%Y:%m:%d %H:%M:%S")
         except :
-            print("unable to read exif information for ", filePath)   
+            print("unable to read exif information for ", filePath)  
+    # for supported video files lets extract metatdata
     elif fileName.split('.')[1].lower() in videoFormats:
         parser = createParser(filePath)
         if parser:
@@ -53,8 +61,7 @@ def get_dates(filePath, fileName):
             else:
                 print("unable to read exif information for ", filePath)   
         else:
-            print("unable to read exif information for ", filePath)   
-        
+            print("unable to read exif information for ", filePath)           
     #everything else just defaults to creation date
     else:
         print("EXIF NOT SUPPORTED FOR  ", filePath)   
@@ -62,6 +69,8 @@ def get_dates(filePath, fileName):
     return dates
 
 
+#moves files after creating target dreictory. It will prepend the target directory with any
+# string provided in preString parameter 
 def moveFile(filePath, file, dirName, preString=""):
     if(preString != ""):
         dirName = preString + "-" + dirName
@@ -77,62 +86,76 @@ def moveFile(filePath, file, dirName, preString=""):
     print(filePath, " ==>  ", targetDir)
 
 
-def checkRecurringDay(dateToCheck):
+
+# generic date comparer method. It will compare dates in MM/DD format by default
+# if includeYearsInComparison set to True it will use the date format YYYY/MM/DD 
+def dateComparer(recurringDay, dateToCheck, includeYearsInComparison=False):
+
+    #for recurring day comparision we consider only month and day
+    format = "%m/%d"
+
+    if includeYearsInComparison:
+        #for special day comparision we consider year, month and day
+        format = dateFormat
+    return (recurringDay['day'].strftime(format) == dateToCheck.strftime(format))
+
+
+
+def checkDay(dateList, dateToCheck, includeYearsInComparison=False):
     if(dateToCheck == ""):
         return []
-    return list(filter(lambda recurringDay: (recurringDay['day'].day == dateToCheck.date().day and recurringDay['day'].month == dateToCheck.date().month), recurringDays))
+    return list(filter(lambda d:dateComparer(d, dateToCheck, includeYearsInComparison) , dateList))
 
-def moveByRecurringDay(root, file, filePath, dates):
-    #check for exif data
-    recurringDay = checkRecurringDay(dates["date_taken"])
-    if(len(recurringDay) == 1):
-        moveFile(filePath, file, recurringDay[0]['dirName'], dates["date_taken"].strftime(dateFormat))
+
+
+# sort a file either based on recurring days or special day. by default it will sort based on recurring day
+# 
+def sortRecurringAndSpecialDayFiles(root, file, filePath, dates, specialDay):
+    #finds point of interest date and then moved based on date_taken, modification date and creation date in that order
+     #check for exif data
+    dateList = recurringDays
+    if(specialDay):
+        print("special day ")
+        dateList = specialDays
+
+    poiDay = checkDay(dateList, dates["date_taken"], specialDay)
+    if(len(poiDay) == 1):
+        moveFile(filePath, file, poiDay[0]['dirName'], dates["date_taken"].strftime(dateFormat))
         return True
     
-    #check for exif data
-    recurringDay = checkRecurringDay(dates["modification_date"])
-    if(len(recurringDay) == 1):
-        moveFile(filePath, file, recurringDay[0]['dirName'], dates["modification_date"].strftime(dateFormat))
+    #check for modification date
+    poiDay = checkDay(dateList, dates["modification_date"], specialDay)
+    if(len(poiDay) == 1):
+        moveFile(filePath, file, poiDay[0]['dirName'], dates["modification_date"].strftime(dateFormat))
         return True
     
-    #check for exif data
-    recurringDay = checkRecurringDay(dates["creation_date"])
-    if(len(recurringDay) == 1):
-        moveFile(filePath, file, recurringDay[0]['dirName'], dates["creation_date"].strftime(dateFormat))
+    #finally check for creation date
+    poiDay = checkDay(dateList, dates["creation_date"], specialDay)
+    if(len(poiDay) == 1):
+        print("moving by creation date")
+        moveFile(filePath, file, poiDay[0]['dirName'], dates["creation_date"].strftime(dateFormat))
         return True
     
     return False
 
-def checkSpecialDay(dateToCheck):
-    if(dateToCheck == ""):
-        return []
-    return list(filter(lambda specialDay: (specialDay['day'].day == dateToCheck.date().day and 
-    specialDay['day'].month == dateToCheck.date().month and 
-    specialDay['day'].day == dateToCheck.date().day), specialDays))
+
+
+#simple wrapper function for sortRecurringAndSpecialDayFiles. Call
+# sortRecurringAndSpecialDayFiles with specialDay parameter set to False
+def moveByRecurringDay(root, file, filePath, dates):    
+    return sortRecurringAndSpecialDayFiles (root, file, filePath, dates, False)
 
 
 
+#simple wrapper function for sortRecurringAndSpecialDayFiles. Call
+# sortRecurringAndSpecialDayFiles with specialDay parameter set to True
 def moveBySpecialDay(root, file, filePath, dates):
-    #check for exif data
-    specialDay = checkSpecialDay(dates["date_taken"])
-    if(len(specialDay) == 1):
-        moveFile(filePath, file, specialDay[0]['dirName'], dates["date_taken"].strftime(dateFormat))
-        return True
-    
-    #check for exif data
-    specialDay = checkSpecialDay(dates["modification_date"])
-    if(len(specialDay) == 1):
-        moveFile(filePath, file, specialDay[0]['dirName'], dates["modification_date"].strftime(dateFormat))
-        return True
-    
-    #check for exif data
-    specialDay = checkSpecialDay(dates["creation_date"])
-    if(len(specialDay) == 1):
-        moveFile(filePath, file, specialDay[0]['dirName'], dates["creation_date"].strftime(dateFormat))
-        return True
-    
-    return False    
-    
+    return sortRecurringAndSpecialDayFiles (root, file, filePath, dates, True)
+ 
+
+
+ # this method will sort the media by date. order of precedence is date taken, creation date and then
+ # modificaiton date    
 def sortByDate(root, file, filePath, dates):
 
     # files does not fall under on recurring day, special day or range
@@ -145,19 +168,20 @@ def sortByDate(root, file, filePath, dates):
     elif(dates["modification_date"] != ""): 
         moveFile(filePath, file, dates["modification_date"].strftime("%Y-%m"))
     else:
-        print("can't sort based ")
+        print("ERROR - CAN'T BE SORTED - ", filePath)
         return False    
     return True
-       
 
-    
+
+
+# Runs through all the files in a given source directory and processes it one by one    
 def runThruFiles():
     for root, subdirs, files in os.walk(sourceDir):
         for file in os.listdir(root):
             filePath = os.path.join(root, file)
             if os.path.isfile(filePath):
                dates = get_dates(filePath, file)
-            #    print(dates)
+               print(dates)
                if(moveBySpecialDay(root, file, filePath, dates)):
                    continue
                if(moveByRecurringDay(root, file, filePath, dates)):
@@ -167,6 +191,9 @@ def runThruFiles():
                    
                print("\n")
 
+
+
+# reads configuration file and sets up internal data structures
 def readDays():
     with open("days.csv", 'r') as data:      
         for line in csv.DictReader(data):
@@ -190,7 +217,6 @@ def readDays():
     # print("\nSpecial Days ------ ")
     # print(specialDays)
     
-
 
 if __name__ == "__main__":
     print("sorting files ")
