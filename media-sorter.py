@@ -21,6 +21,7 @@ DATE_TIME_ORIG_TAG = 36867
 
 recurringDays = []
 specialDays = []
+dateRanges = []
 
 
 def get_field (exif,field) :
@@ -89,7 +90,7 @@ def moveFile(filePath, file, dirName, preString=""):
 
 # generic date comparer method. It will compare dates in MM/DD format by default
 # if includeYearsInComparison set to True it will use the date format YYYY/MM/DD 
-def dateComparer(recurringDay, dateToCheck, isSpecialDay=False):
+def dateComparer(dateFromList, dateToCheck, isSpecialDay=False):
 
     #for recurring day comparision we consider only month and day
     format = "%m/%d"
@@ -97,7 +98,7 @@ def dateComparer(recurringDay, dateToCheck, isSpecialDay=False):
     if isSpecialDay:
         #for special day comparision we consider year, month and day
         format = dateFormat
-    return (recurringDay['day'].strftime(format) == dateToCheck.strftime(format))
+    return (dateFromList['day'].strftime(format) == dateToCheck.strftime(format))
 
 
 
@@ -152,6 +153,35 @@ def moveBySpecialDay(root, file, filePath, dates):
     return sortRecurringAndSpecialDayFiles (root, file, filePath, dates, True)
  
 
+def isInRangeChecker(dateRange, dateToCheck):
+    return (dateRange["rangeStart"] <= dateToCheck <= dateRange["rangeEnd"])
+
+def isInRange(dateRanges, dateToCheck):
+    if(dateToCheck == ""):
+        return []
+    return list(filter(lambda dateRange:isInRangeChecker(dateRange, dateToCheck) , dateRanges))
+
+
+def sortOnRange(root, file, filePath, dates):
+
+    #check if exif date taken falls in our range
+    dateRange = isInRange(dateRanges, dates["date_taken"])
+    if(len(dateRange) == 0):
+        #may be creation dates falls within given range
+        dateRange = isInRange(dateRanges, dates["creation_date"])
+        if(len(dateRange) == 0):
+            #finally lets try if modification date atleast falls in the given range
+            dateRange = isInRange(dateRanges, dates["modification_date"])
+            if(len(dateRange) == 0):
+                #none of hte three dates are in our range, return False
+                return False
+
+    # one of either exif date taken, creation date or modification date is within given range        
+    preFix = dateRange[0]["rangeStart"].strftime(dateFormat) + "---" + dateRange[0]["rangeEnd"].strftime(dateFormat)
+    moveFile(filePath, file, dateRange[0]['dirName'], preFix)       
+    return True
+
+
 
  # this method will sort the media by date. order of precedence is date taken, creation date and then
  # modificaiton date    
@@ -180,8 +210,10 @@ def runThruFiles():
             filePath = os.path.join(root, file)
             if os.path.isfile(filePath):
                dates = get_dates(filePath, file)
-               print(dates)
+            #    print(dates)
                if(moveBySpecialDay(root, file, filePath, dates)):
+                   continue
+               if(sortOnRange(root, file, filePath, dates)):
                    continue
                if(moveByRecurringDay(root, file, filePath, dates)):
                    continue
@@ -210,14 +242,30 @@ def readDays():
                     specialDay['day'] = day
                     specialDay['dirName'] = line['dirName']
                     specialDays.append(specialDay)
+                elif line['type'] == 'range':
+                    dataRange = {}
+                    rangeStart = datetime.datetime.strptime(line['from'], '%Y/%m/%d')
+                    dataRange['rangeStart'] = rangeStart
+                    # To has to be until the end of the specified day. 
+                    temp = datetime.datetime.strptime(line['to'], '%Y/%m/%d')                    
+                    rangeEnd = datetime.datetime(temp.year, temp.month, temp.day, 23, 59, 59)
+             
+                    dataRange['rangeEnd'] = rangeEnd
+                    dataRange['dirName'] = line['dirName']
+                    dateRanges.append(dataRange)
     
     # print("\nRecurring Days ------ ")
     # print(recurringDays)
     # print("\nSpecial Days ------ ")
     # print(specialDays)
+    # print("\nRanges Days ------ ")
+    # print(dateRanges)
+    # print("\n")
     
 
 if __name__ == "__main__":
-    print("sorting files ")
+    # print("sorting files ")
     readDays()
     runThruFiles()
+
+
