@@ -89,48 +89,47 @@ def moveFile(filePath, file, dirName, preString=""):
 
 # generic date comparer method. It will compare dates in MM/DD format by default
 # if includeYearsInComparison set to True it will use the date format YYYY/MM/DD 
-def dateComparer(recurringDay, dateToCheck, includeYearsInComparison=False):
+def dateComparer(recurringDay, dateToCheck, isSpecialDay=False):
 
     #for recurring day comparision we consider only month and day
     format = "%m/%d"
 
-    if includeYearsInComparison:
+    if isSpecialDay:
         #for special day comparision we consider year, month and day
         format = dateFormat
     return (recurringDay['day'].strftime(format) == dateToCheck.strftime(format))
 
 
 
-def checkDay(dateList, dateToCheck, includeYearsInComparison=False):
+def checkDay(dateList, dateToCheck, isSpecialDay=False):
     if(dateToCheck == ""):
         return []
-    return list(filter(lambda d:dateComparer(d, dateToCheck, includeYearsInComparison) , dateList))
+    return list(filter(lambda d:dateComparer(d, dateToCheck, isSpecialDay) , dateList))
 
 
 
 # sort a file either based on recurring days or special day. by default it will sort based on recurring day
 # 
-def sortRecurringAndSpecialDayFiles(root, file, filePath, dates, specialDay):
+def sortRecurringAndSpecialDayFiles(root, file, filePath, dates, isSpecialDay):
     #finds point of interest date and then moved based on date_taken, modification date and creation date in that order
      #check for exif data
     dateList = recurringDays
-    if(specialDay):
-        print("special day ")
+    if(isSpecialDay):
         dateList = specialDays
 
-    poiDay = checkDay(dateList, dates["date_taken"], specialDay)
+    poiDay = checkDay(dateList, dates["date_taken"], isSpecialDay)
     if(len(poiDay) == 1):
         moveFile(filePath, file, poiDay[0]['dirName'], dates["date_taken"].strftime(dateFormat))
         return True
     
     #check for modification date
-    poiDay = checkDay(dateList, dates["modification_date"], specialDay)
+    poiDay = checkDay(dateList, dates["modification_date"], isSpecialDay)
     if(len(poiDay) == 1):
         moveFile(filePath, file, poiDay[0]['dirName'], dates["modification_date"].strftime(dateFormat))
         return True
     
     #finally check for creation date
-    poiDay = checkDay(dateList, dates["creation_date"], specialDay)
+    poiDay = checkDay(dateList, dates["creation_date"], isSpecialDay)
     if(len(poiDay) == 1):
         print("moving by creation date")
         moveFile(filePath, file, poiDay[0]['dirName'], dates["creation_date"].strftime(dateFormat))
