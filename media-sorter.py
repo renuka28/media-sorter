@@ -1,12 +1,14 @@
 # TODO dont create target folder inside source folder
-import os, os.path, time, sys, datetime, csv
-from os import close, error
+import os, os.path, time, sys, datetime, csv, time
+from os import close, error, stat
 from PIL import Image
 from PIL.ExifTags import TAGS
 from hachoir.parser import createParser
 from hachoir.metadata import extractMetadata
 from pathlib import Path
 import logging, traceback
+import timeit
+# import pyheif
 
 # test source and target directories
 sourceDir = "S:\\Renuka\\Renuka-Data\\Personal\\learning\\python\\source\\test\\source"
@@ -45,6 +47,11 @@ configFile = ""
 recurringDays = []
 specialDays = []
 dateRanges = []
+statsDict = {}
+
+
+
+
 
 def formatMessage(status, source, sourceFile, targetFile="", additonalInfo="", exceptionMsg=""):
     return status + "," + source + "," + sourceFile + "," + targetFile + "," + additonalInfo + "," + exceptionMsg
@@ -93,7 +100,8 @@ def get_dates(filePath, fileName):
     dates["date_taken"] = ""
    
    # for supported image files lets extract exif information
-    if fileName.split('.')[1].lower() in imgFormats:  
+    fileExtension = os.path.splitext(fileName)[1][1:].lower()
+    if fileExtension in imgFormats:  
         try:
             with Image.open(filePath) as im:
                 exif =  im._getexif()
@@ -104,9 +112,10 @@ def get_dates(filePath, fileName):
                     dates["date_taken"]  = datetime.datetime.strptime(datestr, "%Y:%m:%d %H:%M:%S")
         except Exception as err:
             logger.error(formatMessage("FAILURE", "get_dates.Image.Exception", filePath, "", "unable to read exif information", format(err)))  
+            statsDict["totalMissingExif"] += 1
             # print(traceback.print_exc())
     # for supported video files lets extract metatdata
-    elif fileName.split('.')[1].lower() in videoFormats:
+    elif fileExtension in videoFormats:
         try:
             parser = createParser(filePath)
             if parser:
@@ -115,21 +124,30 @@ def get_dates(filePath, fileName):
                         metadata = extractMetadata(parser)
                     except Exception as err:
                         logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "exception while reading exif information", format(err)))
+                        statsDict["totalMissingExif"] += 1
                         metadata = None
                 if metadata:
                     dates["date_taken"]  = metadata.get('creation_date')
                 else:
                     logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))
             else:
-                logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "unable to read exif information"))         
+                logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "unable to read exif information"))
+                statsDict["totalMissingExif"] += 1   
         except Exception as err:
             logger.error(formatMessage("FAILURE", "get_dates.createParser.Exception", filePath, "", "unable to create parser", format(err)))  
   
     #everything else just defaults to creation date
     else:
-        logger.error(formatMessage("FAILURE", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))        
+        logger.error(formatMessage("FAILURE", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))
+        statsDict["totalMissingExif"] += 1
     
-    print("\n",dates)
+  
+    if dates["date_taken"] == datetime.datetime(1904, 1, 1):
+        #invalid exif information. ignore it
+        logger.warning(formatMessage("WARNING", "get_dates", filePath, "", "invalid exif information (1904/01/01). ignoring it", ""))  
+        dates["date_taken"] = ""
+
+    # print(dates)
     return dates
 
 
@@ -267,12 +285,16 @@ def sortByDate(root, file, filePath, dates):
     # named after either date taken or created 
     if(dates["date_taken"] != ""):        
         moveFile(filePath, file, dates["date_taken"].strftime(dateYearMonthFormat), dates["date_taken"], False )
+        statsDict["totalProcessedOnExifDate"] += 1
     elif(dates["creation_date"] != ""): 
         moveFile(filePath, file, dates["creation_date"].strftime(dateYearMonthFormat), dates["creation_date"], False)
+        statsDict["totalProcessedOnModifiedDate"] += 1
     elif(dates["modification_date"] != ""): 
         moveFile(filePath, file, dates["modification_date"].strftime(dateYearMonthFormat),  dates["modification_date"])
+        statsDict["totalProcessedOnCreationDate"] += 1
     else:
         logger.error(formatMessage("FAILURE", "sortByDate", filePath, "", "ERROR - CAN'T BE SORTED"))
+        statsDict["totalFailures"] += 1
         
         return False    
     return True
@@ -281,20 +303,29 @@ def sortByDate(root, file, filePath, dates):
 
 # Runs through all the files in a given source directory and processes it one by one    
 def processMedia(configFile):
+
     for root, subdirs, files in os.walk(sourceDir):
         for file in os.listdir(root):
             filePath = os.path.join(root, file)
+            if os.path.isdir(filePath) :
+                statsDict["totalDirProcessed"] += 1
             if os.path.isfile(filePath) and filePath != configFile:
+                statsDict["totalFilesProcessed"] += 1
                 dates = get_dates(filePath, file)
                 # print(dates)
                 if(moveBySpecialDay(root, file, filePath, dates)):
+                    statsDict["totalSortedOnSpecialDate"] += 1
                     continue
                 if(sortOnRange(root, file, filePath, dates)):
+                    statsDict["totalSortedOnRange"] += 1
                     continue
                 if(moveByRecurringDay(root, file, filePath, dates)):
+                    statsDict["totalSortedOnRecurringDate"] += 1
                     continue
                 if(sortByDate(root, file, filePath, dates)):
-                    continue     
+                    statsDict["totalSortedOnDate"] += 1
+                    continue  
+
 
 
 
@@ -380,13 +411,93 @@ def readCmdLine():
     
     return sourceDir, targetBaseDir
 
+def init():
+    statsDict = {
+    "startTime" : timeit.default_timer(),
+    "endTime" : 0,
+    "totalFilesProcessed": 0,
+    "totalDirProcessed":0,
+    "totalFailures" : 0,
+    "totalMissingExif" : 0,
+    "totalProcessedOnExifDate" : 0,
+    "totalProcessedOnModifiedDate" : 0,
+    "totalProcessedOnCreationDate" : 0,
+    "totalSortedOnSpecialDate" : 0,
+    "totalSortedOnRecurringDate" : 0,
+    "totalSortedOnDate" : 0,
+    "totalSortedOnRange" : 0
+
+    }
+    return statsDict
+
+def getExecutionTime():
+    executionTime = statsDict["endTime"] - statsDict["startTime"]
+
+    # output running time in a nice format.
+    mins, secs = divmod(executionTime, 60)
+    hours, mins = divmod(mins, 60)
+
+    return ("%d:%d:%d\n" % (hours, mins, secs))
+
+def printStatistics():
+    
+    print("\nHere are the statsDict ... \n",statsDict, "\n")
+    
+    msg = "total directories processed - {0}".format(statsDict["totalDirProcessed"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    msg = "total files processed - {0}".format(statsDict["totalFilesProcessed"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    msg = "count of media files sorted based on special date - {0}".format(statsDict["totalSortedOnSpecialDate"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    msg = "count of media files sorted based on range - {0}".format(statsDict["totalSortedOnRange"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    msg = "count of media files sorted based on recurring date - {0}".format(statsDict["totalSortedOnRecurringDate"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    msg = "count of media files sorted based on date - {0} [based on exif date ({1}) + creation date ({2}) + modification date ({3})]".format(statsDict["totalSortedOnDate"], statsDict["totalProcessedOnExifDate"], statsDict["totalProcessedOnCreationDate"], statsDict["totalProcessedOnModifiedDate"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    msg = "count of media files having VALID Exif data - {0}".format(statsDict["totalProcessedOnExifDate"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    msg = "count of media files having INVALID Exif data  - {0}".format(statsDict["totalMissingExif"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    msg = "total sorting failures - {0}".format(statsDict["totalFailures"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    statsDict["endTime"] = timeit.default_timer()
+    msg = "total exeuction time - {0} ".format(getExecutionTime())
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    print()
+
+    return
+
 
 if __name__ == "__main__":
 
+    
     # read command line
     sourceDir, targetBaseDir = readCmdLine()
     print("Source directory - ", sourceDir)
     print("Target directory - ", targetBaseDir)
+
+    statsDict = init()
 
     # setup loggin
     logger = setupLogging()  
@@ -400,6 +511,10 @@ if __name__ == "__main__":
         processMedia(configFile)
     else:
         logger.error(formatMessage("FAILURE", "__main__", "", "", "Couldn't load configuration file. exiting..."))
+    
+    #print statistics
+    printStatistics()
+
         
     
     
