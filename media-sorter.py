@@ -82,11 +82,14 @@ def get_dates(filePath, fileName):
         try:
             with Image.open(filePath) as im:
                 exif =  im._getexif()
-                if DATE_TIME_ORIG_TAG in exif:
+                if exif is None:
+                    logger.error(formatMessage("FAILURE", "get_dates.Image.exif.None", filePath, "", "image has no exif information"))  
+                elif DATE_TIME_ORIG_TAG in exif:
                     datestr = exif[DATE_TIME_ORIG_TAG]
                     dates["date_taken"]  = datetime.datetime.strptime(datestr, "%Y:%m:%d %H:%M:%S")
         except Exception as err:
-            logger.error(formatMessage("FAILURE", "get_dates.Image", filePath, "", "Image - unable to read exif information", format(err)))  
+            logger.error(formatMessage("FAILURE", "get_dates.Image.Exception", filePath, "", "unable to read exif information", format(err)))  
+            # print(traceback.print_exc())
     # for supported video files lets extract metatdata
     elif fileName.split('.')[1].lower() in videoFormats:
         parser = createParser(filePath)
