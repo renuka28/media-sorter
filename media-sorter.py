@@ -1,3 +1,4 @@
+# TODO dont create target folder inside source folder
 import os, os.path, time, sys, datetime, csv
 from os import close
 from PIL import Image
@@ -5,6 +6,7 @@ from PIL.ExifTags import TAGS
 from hachoir.parser import createParser
 from hachoir.metadata import extractMetadata
 from pathlib import Path
+import logging, traceback
 
 # test source and target directories
 sourceDir = "S:\\Renuka\\Renuka-Data\\Personal\\learning\\python\\source\\test\\source"
@@ -18,10 +20,47 @@ imgFormats = ['png', 'jpg', 'jpeg']
 #supported video formats
 videoFormats = ['m4v', 'mov', 'mp4']
 DATE_TIME_ORIG_TAG = 36867
+loggerName = "media-sorter-log"
+logFileName = loggerName + ".csv"
+logFileHeader = ['Result', 'From', 'To']
+logger = ""
 
 recurringDays = []
 specialDays = []
 dateRanges = []
+
+def formatMessage(status, source, sourceFile, targetFile="", additonalInfo="", exceptionMsg=""):
+    return status + "," + source + "," + sourceFile + "," + targetFile + "," + additonalInfo + "," + exceptionMsg
+
+def setupLogging():
+    # create target directory
+    print("creating direcotry - ", targetBaseDir)
+    Path(targetBaseDir).mkdir(parents=True, exist_ok=True)
+    logFile = os.path.join(targetBaseDir, logFileName)    
+    print("setting up logging -", logFile,"\n")
+
+    # create logger
+    logger = logging.getLogger(loggerName)
+    logger.setLevel(logging.DEBUG) # log all escalated at and above DEBUG
+    # add a file handler
+    fh = logging.FileHandler(logFile)
+    fh.setLevel(logging.DEBUG) # ensure all messages are logged to file
+
+    # create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.ERROR)
+
+    # create a formatter and set the formatter for the handler.
+    # formatter = logging.Formatter('%(asctime)s,%(name)s,%(levelname)s,%(message)s')
+    formatter = logging.Formatter('%(asctime)s,%(levelname)s,%(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    # add the Handler to the logger
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+    return logger
+
 
 
 def get_field (exif,field) :
@@ -32,6 +71,7 @@ def get_field (exif,field) :
 # extracts dates from the media files. We retrive creation date, modification and date taken
 def get_dates(filePath, fileName):
     dates = {}
+    # logger = logging.getLogger(loggerName)
     # print(filePath)
     dates["creation_date"]  = datetime.datetime.strptime(time.ctime(os.path.getctime(filePath)), "%c")
     dates["modification_date"]  = datetime.datetime.strptime(time.ctime(os.path.getmtime(filePath)), "%c")
@@ -45,8 +85,8 @@ def get_dates(filePath, fileName):
                 if DATE_TIME_ORIG_TAG in exif:
                     datestr = exif[DATE_TIME_ORIG_TAG]
                     dates["date_taken"]  = datetime.datetime.strptime(datestr, "%Y:%m:%d %H:%M:%S")
-        except :
-            print("unable to read exif information for ", filePath)  
+        except Exception as err:
+            logger.error(formatMessage("FAILURE", "get_dates.Image", filePath, "", "Image - unable to read exif information", format(err)))  
     # for supported video files lets extract metatdata
     elif fileName.split('.')[1].lower() in videoFormats:
         parser = createParser(filePath)
@@ -55,17 +95,17 @@ def get_dates(filePath, fileName):
                 try:
                     metadata = extractMetadata(parser)
                 except Exception as err:
-                    print("Metadata extraction error: %s" % err)
+                    logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "exception while reading exif information", format(err)))
                     metadata = None
             if metadata:
                 dates["date_taken"]  = metadata.get('creation_date')
             else:
-                print("unable to read exif information for ", filePath)   
+                logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))
         else:
-            print("unable to read exif information for ", filePath)           
+            logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "unable to read exif information"))         
     #everything else just defaults to creation date
     else:
-        print("EXIF NOT SUPPORTED FOR  ", filePath)   
+        logger.error(formatMessage("FAILURE", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))        
     
     return dates
 
@@ -77,14 +117,15 @@ def moveFile(filePath, file, dirName, preString=""):
         dirName = preString + "-" + dirName
     targetDir = os.path.join(targetBaseDir, dirName)
     Path(targetDir).mkdir(parents=True, exist_ok=True)
-    target = os.path.join(targetDir,file)
+    target = os.path.join(targetDir,file)    
     try:
         Path(filePath).rename(target)
-    except WindowsError:
-        os.remove(target)
-        Path(filePath).rename(target)
+        logger.info(formatMessage("SUCCESS", "moveFile", filePath, target))  
+    except Exception as err:
+        logger.error(formatMessage("FAILURE", "moveFile.move.Exception", filePath, target, "unable to process file", format(err)))         
+        
     
-    print(filePath, " ==>  ", targetDir)
+
 
 
 
@@ -131,8 +172,7 @@ def sortRecurringAndSpecialDayFiles(root, file, filePath, dates, isSpecialDay):
     
     #finally check for creation date
     poiDay = checkDay(dateList, dates["creation_date"], isSpecialDay)
-    if(len(poiDay) == 1):
-        print("moving by creation date")
+    if(len(poiDay) == 1):        
         moveFile(filePath, file, poiDay[0]['dirName'], dates["creation_date"].strftime(dateFormat))
         return True
     
@@ -197,36 +237,38 @@ def sortByDate(root, file, filePath, dates):
     elif(dates["modification_date"] != ""): 
         moveFile(filePath, file, dates["modification_date"].strftime("%Y-%m"))
     else:
-        print("ERROR - CAN'T BE SORTED - ", filePath)
+        logger.error(formatMessage("FAILURE", "sortByDate", filePath, "", "ERROR - CAN'T BE SORTED"))
+        
         return False    
     return True
 
 
 
 # Runs through all the files in a given source directory and processes it one by one    
-def runThruFiles():
+def processMedia():
     for root, subdirs, files in os.walk(sourceDir):
         for file in os.listdir(root):
             filePath = os.path.join(root, file)
             if os.path.isfile(filePath):
-               dates = get_dates(filePath, file)
-            #    print(dates)
-               if(moveBySpecialDay(root, file, filePath, dates)):
-                   continue
-               if(sortOnRange(root, file, filePath, dates)):
-                   continue
-               if(moveByRecurringDay(root, file, filePath, dates)):
-                   continue
-               if(sortByDate(root, file, filePath, dates)):
-                   continue            
-                   
-               print("\n")
+                dates = get_dates(filePath, file)
+                # print(dates)
+                if(moveBySpecialDay(root, file, filePath, dates)):
+                    continue
+                if(sortOnRange(root, file, filePath, dates)):
+                    continue
+                if(moveByRecurringDay(root, file, filePath, dates)):
+                    continue
+                if(sortByDate(root, file, filePath, dates)):
+                    continue     
 
 
 
 # reads configuration file and sets up internal data structures
-def readDays():
-    with open("days.csv", 'r') as data:      
+def readConfiguration():
+    scriptPath = os.path.dirname(os.path.realpath(__file__))
+    daysCsv = os.path.join(scriptPath, "days.csv")
+    print("reading configuration data from -", daysCsv, "\n")
+    with open(daysCsv, 'r') as data:      
         for line in csv.DictReader(data):
             # print(line)
             if "type" in line:
@@ -262,10 +304,52 @@ def readDays():
     # print(dateRanges)
     # print("\n")
     
+def printHelp():
+    print("This scripts sorts your media based on the data provided in the configuration file 'days.csv'\n")
+    print("days.csv format is simple. It is a csv file with four columns 'type', 'from', 'to', 'dirName'\n")
+    print("type indicate what kind of entry particular line is. Allowe values or 'recurringDay', 'specialDay' and 'range'")
+    print("\ntype 'recurringDay' requires only from column with date fromat MM/DD. All files with any one of date taken, creation or modification date are moved to its own directory with name provided in 'dirName' column prepended by its year")
+    print("\ntype 'specialDay' requires only from column with date fromat YYYY/MM/DD. All files with any one of date taken, creation or modification date are moved to its own directory with name provided in 'dirName' column")
+    print("\ntype 'range' requires from and to column with date fromat YYYY/MM/DD. All files with any one of date taken, creation or modification date falling within the given range are moved to its own directory with name provided in 'dirName' column\n")
+    print("     usage:")
+    print("     media-sorter <source-directory> <target-directory>")
+    print("     <source-directory> defaults to current directory")
+    print("     <target-directory> defaults to 'sorted-media' and a new directory will be created. IF THE TARGET DIRECTORY EXISTS ALL EXISTING FILES WILL BE OVERWRITTEN\n")
+
+
+def readCmdLine():
+    n = len(sys.argv)
+    if(n == 2):
+        sourceDir = Path(sys.argv[1]).absolute()
+        targetBaseDir = Path(os.path.join(Path(sourceDir).parent.absolute(),"sorted-media")).absolute()
+    elif(n == 3):
+        sourceDir = Path(sys.argv[1]).absolute()
+        targetBaseDir = Path(sys.argv[2]).absolute()
+    else:
+        printHelp()
+    
+    print("Source directory - ", sourceDir)
+    print("Target directory - ", targetBaseDir)
+    print()   
+
+    return sourceDir, targetBaseDir
+
 
 if __name__ == "__main__":
-    # print("sorting files ")
-    readDays()
-    runThruFiles()
+
+    # read command line
+    sourceDir, targetBaseDir = readCmdLine()
+
+    # read configuration
+    readConfiguration()
+    
+    # setup loggin
+    logger = setupLogging()    
+    
+    # process all media files
+    processMedia()
+
+    
+
 
 
