@@ -1,6 +1,6 @@
 # TODO dont create target folder inside source folder
 import os, os.path, time, sys, datetime, csv
-from os import close
+from os import close, error
 from PIL import Image
 from PIL.ExifTags import TAGS
 from hachoir.parser import createParser
@@ -33,7 +33,9 @@ logFileHeader = ['Result', 'From', 'To']
 logger = ""
 
 #configuration filename
-configFile = "media-sorter-config.csv"
+configFileName = "media-sorter-config.csv"
+#configuration file with full path
+configFile = ""
 
 #global variables
 recurringDays = []
@@ -257,11 +259,11 @@ def sortByDate(root, file, filePath, dates):
 
 
 # Runs through all the files in a given source directory and processes it one by one    
-def processMedia():
+def processMedia(configFile):
     for root, subdirs, files in os.walk(sourceDir):
         for file in os.listdir(root):
             filePath = os.path.join(root, file)
-            if os.path.isfile(filePath):
+            if os.path.isfile(filePath) and filePath != configFile:
                 dates = get_dates(filePath, file)
                 # print(dates)
                 if(moveBySpecialDay(root, file, filePath, dates)):
@@ -277,10 +279,19 @@ def processMedia():
 
 # reads configuration file and sets up internal data structures
 def readConfiguration():
-    scriptPath = os.path.dirname(os.path.realpath(__file__))
-    daysCsv = os.path.join(scriptPath, configFile)
-    print("reading configuration data from -", daysCsv, "\n")
-    with open(daysCsv, 'r') as data:      
+    
+    configFile = os.path.join(os.path.dirname(os.path.realpath(__file__)), configFileName)
+    if not os.path.isfile(configFile):
+        logger.warning(formatMessage("WARNING", "readConfiguration", configFile, "", "Configuration file does not exist in default location. Trying under source directory "))
+        configFile = os.path.join(sourceDir, configFileName)
+        if not os.path.isfile(configFile):
+            logger.error(formatMessage("FAILURE", "readConfiguration", configFile, "", "Configuration file does not exist. Existing script"))
+            return configFile, False
+    
+    logger.info(formatMessage("SUCCESS", "readConfiguration", configFile, "", "Found Configuration file"))
+
+    print("reading configuration data from -", configFile, "\n")
+    with open(configFile, 'r') as data:      
         for line in csv.DictReader(data):
             # print(line)
             if "type" in line:
@@ -307,6 +318,8 @@ def readConfiguration():
                     dataRange['rangeEnd'] = rangeEnd
                     dataRange['dirName'] = line['dirName']
                     dateRanges.append(dataRange)
+    
+    return configFile, True
     
     # print("\nRecurring Days ------ ")
     # print(recurringDays)
@@ -340,13 +353,10 @@ def readCmdLine():
         targetBaseDir = Path(sys.argv[2]).absolute()
     else:
         printHelp()
-    
-    print("Source directory - ", sourceDir)
+        
     # create target directory
     Path(targetBaseDir).mkdir(parents=True, exist_ok=True)
-    print("Target directory - ", targetBaseDir)
-    print()   
-
+    
     return sourceDir, targetBaseDir
 
 
@@ -354,15 +364,26 @@ if __name__ == "__main__":
 
     # read command line
     sourceDir, targetBaseDir = readCmdLine()
+    print("Source directory - ", sourceDir)
+    print("Target directory - ", targetBaseDir)
+
+    # setup loggin
+    logger = setupLogging()  
+    logger.info(formatMessage("SUCCESS", "__main__", str(sourceDir), "", "Source directory set"))
+    logger.info(formatMessage("SUCCESS", "__main__", str(targetBaseDir), "", "Target directory set"))
 
     # read configuration
-    readConfiguration()
+    configFile, configStatus = readConfiguration()
+    if configStatus:        
+        # process all media files
+        processMedia(configFile)
+    else:
+        logger.error(formatMessage("FAILURE", "__main__", "", "", "Couldn't load configuration file. exiting..."))
+        
     
-    # setup loggin
-    logger = setupLogging()    
     
-    # process all media files
-    processMedia()
+    
+
 
     
 
