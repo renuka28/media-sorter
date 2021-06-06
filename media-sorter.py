@@ -15,6 +15,10 @@ defaultTargetDir = "sorted-media"
 
 # default date format
 dateFormat = '%Y-%m-%d'
+dateTimeFormat = "%Y-%m-%d-%H-%M-%S"
+dateYearMonthFormat = "%Y-%m"
+configYMDFormat = '%Y/%m/%d'
+configMDFormat = '%m/%d'
 #date time tag in exif
 DATE_TIME_ORIG_TAG = 36867
 
@@ -126,10 +130,15 @@ def get_dates(filePath, fileName):
 
 #moves files after creating target dreictory. It will prepend the target directory with any
 # string provided in preString parameter 
-def moveFile(filePath, file, dirName, preString=""):
-    if(preString != ""):
-        dirName = preString + "-" + dirName
-    targetDir = os.path.join(targetBaseDir, dirName)
+def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderName, additionalFolderPrefix=""):
+
+    if(addMediaDateTimeToFolderName):
+       dirName =  mediaDateTime.strftime(dateFormat) + "-" + dirName
+
+    if additionalFolderPrefix != "":
+        dirName = additionalFolderPrefix + "-" + dirName
+
+    targetDir = os.path.join(targetBaseDir, mediaDateTime.strftime("%Y"), dirName)
     Path(targetDir).mkdir(parents=True, exist_ok=True)
     target = os.path.join(targetDir,file)    
     try:
@@ -175,19 +184,19 @@ def sortRecurringAndSpecialDayFiles(root, file, filePath, dates, isSpecialDay):
 
     poiDay = checkDay(dateList, dates["date_taken"], isSpecialDay)
     if(len(poiDay) == 1):
-        moveFile(filePath, file, poiDay[0]['dirName'], dates["date_taken"].strftime(dateFormat))
+        moveFile(filePath, file, poiDay[0]['dirName'], dates["date_taken"], True)
         return True
     
     #check for modification date
     poiDay = checkDay(dateList, dates["modification_date"], isSpecialDay)
     if(len(poiDay) == 1):
-        moveFile(filePath, file, poiDay[0]['dirName'], dates["modification_date"].strftime(dateFormat))
+        moveFile(filePath, file, poiDay[0]['dirName'], dates["modification_date"], True)
         return True
     
     #finally check for creation date
     poiDay = checkDay(dateList, dates["creation_date"], isSpecialDay)
     if(len(poiDay) == 1):        
-        moveFile(filePath, file, poiDay[0]['dirName'], dates["creation_date"].strftime(dateFormat))
+        moveFile(filePath, file, poiDay[0]['dirName'], dates["creation_date"], True)
         return True
     
     return False
@@ -227,12 +236,19 @@ def sortOnRange(root, file, filePath, dates):
             #finally lets try if modification date atleast falls in the given range
             dateRange = isInRange(dateRanges, dates["modification_date"])
             if(len(dateRange) == 0):
-                #none of hte three dates are in our range, return False
+                #none of the three dates are in our range, return False
+                msg = str(dates["date_taken"])
+                msg = msg + " and " + str(dates["creation_date"]) 
+                msg = msg + " and " + str(dates["modification_date"])
+                msg = msg + " not in range"
+
+                # logger.info(formatMessage("INFO", "sortOnRange", filePath, "", msg))
                 return False
 
     # one of either exif date taken, creation date or modification date is within given range        
     preFix = dateRange[0]["rangeStart"].strftime(dateFormat) + "---" + dateRange[0]["rangeEnd"].strftime(dateFormat)
-    moveFile(filePath, file, dateRange[0]['dirName'], preFix)       
+    logger.info(formatMessage("INFO", "sortOnRange", filePath, preFix, "sorting by range"))
+    moveFile(filePath, file, dateRange[0]['dirName'], dateRange[0]["rangeStart"], False,  preFix)       
     return True
 
 
@@ -245,11 +261,11 @@ def sortByDate(root, file, filePath, dates):
     # we just move the file to a folder named with format YYYY-MM 
     # named after either date taken or created 
     if(dates["date_taken"] != ""):        
-        moveFile(filePath, file, dates["date_taken"].strftime("%Y-%m"))
+        moveFile(filePath, file, dates["date_taken"].strftime(dateYearMonthFormat), dates["date_taken"], False )
     elif(dates["creation_date"] != ""): 
-        moveFile(filePath, file, dates["creation_date"].strftime("%Y-%m"))
+        moveFile(filePath, file, dates["creation_date"].strftime(dateYearMonthFormat), dates["creation_date"], False)
     elif(dates["modification_date"] != ""): 
-        moveFile(filePath, file, dates["modification_date"].strftime("%Y-%m"))
+        moveFile(filePath, file, dates["modification_date"].strftime(dateYearMonthFormat),  dates["modification_date"])
     else:
         logger.error(formatMessage("FAILURE", "sortByDate", filePath, "", "ERROR - CAN'T BE SORTED"))
         
@@ -297,22 +313,22 @@ def readConfiguration():
             if "type" in line:
                 if line['type'] == 'recurringDay':
                     recurringDay = {}
-                    day = datetime.datetime.strptime(line['from'], '%m/%d')
+                    day = datetime.datetime.strptime(line['from'], configMDFormat)
                     recurringDay['day'] = day
                     recurringDay['dirName'] = line['dirName']
                     recurringDays.append(recurringDay)
                 elif line['type'] == 'specialDay':
                     specialDay = {}
-                    day = datetime.datetime.strptime(line['from'], '%Y/%m/%d')
+                    day = datetime.datetime.strptime(line['from'], configYMDFormat)
                     specialDay['day'] = day
                     specialDay['dirName'] = line['dirName']
                     specialDays.append(specialDay)
                 elif line['type'] == 'range':
                     dataRange = {}
-                    rangeStart = datetime.datetime.strptime(line['from'], '%Y/%m/%d')
+                    rangeStart = datetime.datetime.strptime(line['from'], configYMDFormat)
                     dataRange['rangeStart'] = rangeStart
                     # To has to be until the end of the specified day. 
-                    temp = datetime.datetime.strptime(line['to'], '%Y/%m/%d')                    
+                    temp = datetime.datetime.strptime(line['to'], configYMDFormat)                    
                     rangeEnd = datetime.datetime(temp.year, temp.month, temp.day, 23, 59, 59)
              
                     dataRange['rangeEnd'] = rangeEnd
@@ -346,7 +362,7 @@ def readCmdLine():
     n = len(sys.argv)
     if(n == 2):
         sourceDir = Path(sys.argv[1]).absolute()
-        dateTimePrefix = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-"
+        dateTimePrefix = datetime.datetime.now().strftime(dateTimeFormat) + "-"
         targetBaseDir = Path(os.path.join(Path(sourceDir).parent.absolute(), dateTimePrefix + defaultTargetDir)).absolute()
     elif(n == 3):
         sourceDir = Path(sys.argv[1]).absolute()
