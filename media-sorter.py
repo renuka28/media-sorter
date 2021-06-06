@@ -59,29 +59,28 @@ def formatMessage(status, source, sourceFile, targetFile="", additonalInfo="", e
 def setupLogging():
     
     logFile = os.path.join(targetBaseDir, logFileName)    
-    print("setting up logging -", logFile,"\n")
+    print("Logfile -", logFile)
 
     # create logger
     logger = logging.getLogger(loggerName)
     logger.setLevel(logging.DEBUG) # log all escalated at and above DEBUG
+
+     # create a formatter and set the formatter for the handler.
+    formatter = logging.Formatter('%(asctime)s,%(levelname)s,%(message)s')
+
     # add a file handler
     fh = logging.FileHandler(logFile)
     fh.setLevel(logging.DEBUG) # ensure all messages are logged to file
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
 
     # create console handler with a higher log level
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.ERROR)
+    # ch = logging.StreamHandler()
+    # ch.setLevel(logging.ERROR)
+    # ch.setFormatter(formatter)
+    # logger.addHandler(ch)
 
-    # create a formatter and set the formatter for the handler.
-    # formatter = logging.Formatter('%(asctime)s,%(name)s,%(levelname)s,%(message)s')
-    formatter = logging.Formatter('%(asctime)s,%(levelname)s,%(message)s')
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-
-    # add the Handler to the logger
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-    return logger
+    return logger, logFile
 
 
 
@@ -260,17 +259,17 @@ def sortOnRange(root, file, filePath, dates):
             dateRange = isInRange(dateRanges, dates["modification_date"])
             if(len(dateRange) == 0):
                 #none of the three dates are in our range, return False
-                msg = str(dates["date_taken"])
-                msg = msg + " and " + str(dates["creation_date"]) 
-                msg = msg + " and " + str(dates["modification_date"])
-                msg = msg + " not in range"
+                # msg = str(dates["date_taken"])
+                # msg = msg + " and " + str(dates["creation_date"]) 
+                # msg = msg + " and " + str(dates["modification_date"])
+                # msg = msg + " not in range"
 
                 # logger.info(formatMessage("INFO", "sortOnRange", filePath, "", msg))
                 return False
 
     # one of either exif date taken, creation date or modification date is within given range        
     preFix = dateRange[0]["rangeStart"].strftime(dateFormat) + "---" + dateRange[0]["rangeEnd"].strftime(dateFormat)
-    logger.info(formatMessage("INFO", "sortOnRange", filePath, preFix, "sorting by range"))
+    # logger.info(formatMessage("INFO", "sortOnRange", filePath,"", "sorting by range"))
     moveFile(filePath, file, dateRange[0]['dirName'], dateRange[0]["rangeStart"], False,  preFix)       
     return True
 
@@ -325,6 +324,8 @@ def processMedia(configFile):
                 if(sortByDate(root, file, filePath, dates)):
                     statsDict["totalSortedOnDate"] += 1
                     continue  
+        print("\rDirectories processed = {0}, files procssed = {1}".format(statsDict["totalDirProcessed"], statsDict["totalFilesProcessed"]), end="")
+    print()
 
 
 
@@ -342,7 +343,7 @@ def readConfiguration():
     
     logger.info(formatMessage("SUCCESS", "readConfiguration", configFile, "", "Found Configuration file"))
 
-    print("reading configuration data from -", configFile, "\n")
+    print("Config  -", configFile, "\n")
     with open(configFile, 'r') as data:      
         for line in csv.DictReader(data):
             # print(line)
@@ -441,9 +442,9 @@ def getExecutionTime():
 
 def printStatistics():
     
-    print("\nHere are the statsDict ... \n",statsDict, "\n")
+    # print("\nHere are the statsDict ... \n",statsDict, "\n")
     
-    msg = "total directories processed - {0}".format(statsDict["totalDirProcessed"])
+    msg = "\ntotal directories processed - {0}".format(statsDict["totalDirProcessed"])
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
@@ -480,11 +481,11 @@ def printStatistics():
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
     statsDict["endTime"] = timeit.default_timer()
-    msg = "total exeuction time - {0} ".format(getExecutionTime())
+    msg = "total exeuction time (HH:MM:SS) - {0} ".format(getExecutionTime())
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
-    print()
+    
 
     return
 
@@ -494,13 +495,14 @@ if __name__ == "__main__":
     
     # read command line
     sourceDir, targetBaseDir = readCmdLine()
-    print("Source directory - ", sourceDir)
-    print("Target directory - ", targetBaseDir)
+    print()
+    print("Source - ", sourceDir)
+    print("Target - ", targetBaseDir)
 
     statsDict = init()
 
     # setup loggin
-    logger = setupLogging()  
+    logger, logFile = setupLogging()  
     logger.info(formatMessage("SUCCESS", "__main__", str(sourceDir), "", "Source directory set"))
     logger.info(formatMessage("SUCCESS", "__main__", str(targetBaseDir), "", "Target directory set"))
 
@@ -515,7 +517,9 @@ if __name__ == "__main__":
     #print statistics
     printStatistics()
 
-        
+    print("Find complete summary in log file - ", logFile)
+
+
     
     
     
