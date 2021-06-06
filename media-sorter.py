@@ -103,24 +103,29 @@ def get_dates(filePath, fileName):
             # print(traceback.print_exc())
     # for supported video files lets extract metatdata
     elif fileName.split('.')[1].lower() in videoFormats:
-        parser = createParser(filePath)
-        if parser:
-            with parser:
-                try:
-                    metadata = extractMetadata(parser)
-                except Exception as err:
-                    logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "exception while reading exif information", format(err)))
-                    metadata = None
-            if metadata:
-                dates["date_taken"]  = metadata.get('creation_date')
+        try:
+            parser = createParser(filePath)
+            if parser:
+                with parser:
+                    try:
+                        metadata = extractMetadata(parser)
+                    except Exception as err:
+                        logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "exception while reading exif information", format(err)))
+                        metadata = None
+                if metadata:
+                    dates["date_taken"]  = metadata.get('creation_date')
+                else:
+                    logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))
             else:
-                logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))
-        else:
-            logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "unable to read exif information"))         
+                logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "unable to read exif information"))         
+        except Exception as err:
+            logger.error(formatMessage("FAILURE", "get_dates.createParser.Exception", filePath, "", "unable to create parser", format(err)))  
+  
     #everything else just defaults to creation date
     else:
         logger.error(formatMessage("FAILURE", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))        
     
+    print("\n",dates)
     return dates
 
 
