@@ -11,20 +11,31 @@ import logging, traceback
 # test source and target directories
 sourceDir = "S:\\Renuka\\Renuka-Data\\Personal\\learning\\python\\source\\test\\source"
 targetBaseDir = "S:\\Renuka\\Renuka-Data\\Personal\\learning\\python\\source\\test\\target"
+defaultTargetDir = "sorted-media"
+
 # default date format
 dateFormat = '%Y-%m-%d'
+#date time tag in exif
+DATE_TIME_ORIG_TAG = 36867
+
 # we will overwrite the target files by default
 overwriteFiles = True
+
 #supported image formats
 imgFormats = ['png', 'jpg', 'jpeg']
 #supported video formats
 videoFormats = ['m4v', 'mov', 'mp4']
-DATE_TIME_ORIG_TAG = 36867
+
+#Log configurations
 loggerName = "media-sorter-log"
 logFileName = loggerName + ".csv"
 logFileHeader = ['Result', 'From', 'To']
 logger = ""
 
+#configuration filename
+configFile = "media-sorter-config.csv"
+
+#global variables
 recurringDays = []
 specialDays = []
 dateRanges = []
@@ -33,9 +44,7 @@ def formatMessage(status, source, sourceFile, targetFile="", additonalInfo="", e
     return status + "," + source + "," + sourceFile + "," + targetFile + "," + additonalInfo + "," + exceptionMsg
 
 def setupLogging():
-    # create target directory
-    print("creating direcotry - ", targetBaseDir)
-    Path(targetBaseDir).mkdir(parents=True, exist_ok=True)
+    
     logFile = os.path.join(targetBaseDir, logFileName)    
     print("setting up logging -", logFile,"\n")
 
@@ -269,7 +278,7 @@ def processMedia():
 # reads configuration file and sets up internal data structures
 def readConfiguration():
     scriptPath = os.path.dirname(os.path.realpath(__file__))
-    daysCsv = os.path.join(scriptPath, "days.csv")
+    daysCsv = os.path.join(scriptPath, configFile)
     print("reading configuration data from -", daysCsv, "\n")
     with open(daysCsv, 'r') as data:      
         for line in csv.DictReader(data):
@@ -324,7 +333,8 @@ def readCmdLine():
     n = len(sys.argv)
     if(n == 2):
         sourceDir = Path(sys.argv[1]).absolute()
-        targetBaseDir = Path(os.path.join(Path(sourceDir).parent.absolute(),"sorted-media")).absolute()
+        dateTimePrefix = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "-"
+        targetBaseDir = Path(os.path.join(Path(sourceDir).parent.absolute(), dateTimePrefix + defaultTargetDir)).absolute()
     elif(n == 3):
         sourceDir = Path(sys.argv[1]).absolute()
         targetBaseDir = Path(sys.argv[2]).absolute()
@@ -332,6 +342,8 @@ def readCmdLine():
         printHelp()
     
     print("Source directory - ", sourceDir)
+    # create target directory
+    Path(targetBaseDir).mkdir(parents=True, exist_ok=True)
     print("Target directory - ", targetBaseDir)
     print()   
 
