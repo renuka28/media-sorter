@@ -8,6 +8,9 @@ from hachoir.metadata import extractMetadata
 from pathlib import Path
 import logging, traceback
 import timeit
+from threading import Timer
+from time import sleep
+from periodic import periodic_task
 # import pyheif
 
 # test source and target directories
@@ -323,8 +326,7 @@ def processMedia(configFile):
                     continue
                 if(sortByDate(root, file, filePath, dates)):
                     statsDict["totalSortedOnDate"] += 1
-                    continue  
-        print("\rDirectories processed = {0}, files procssed = {1}".format(statsDict["totalDirProcessed"], statsDict["totalFilesProcessed"]), end="")
+                    continue          
     print()
 
 
@@ -483,16 +485,17 @@ def printStatistics():
     statsDict["endTime"] = timeit.default_timer()
     msg = "total exeuction time (HH:MM:SS) - {0} ".format(getExecutionTime())
     print(msg)
-    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
-
-    
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))   
 
     return
 
+@periodic_task(1)
+def printProgressStatus():
+    print("\rDirectories processed = {0}, files procssed = {1}...".format(statsDict["totalDirProcessed"], statsDict["totalFilesProcessed"]), end="")
 
-if __name__ == "__main__":
 
-    
+
+if __name__ == "__main__":    
     # read command line
     sourceDir, targetBaseDir = readCmdLine()
     print()
@@ -508,9 +511,11 @@ if __name__ == "__main__":
 
     # read configuration
     configFile, configStatus = readConfiguration()
-    if configStatus:        
+    if configStatus:
+        printProgressStatus()
         # process all media files
         processMedia(configFile)
+
     else:
         logger.error(formatMessage("FAILURE", "__main__", "", "", "Couldn't load configuration file. exiting..."))
     
