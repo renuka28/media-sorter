@@ -1,5 +1,5 @@
 # TODO dont create target folder inside source folder
-import os, os.path, time, sys, datetime, csv, time
+import os, os.path, time, sys, datetime, csv, time, uuid
 from os import close, error, stat
 from PIL import Image
 from PIL.ExifTags import TAGS
@@ -77,7 +77,7 @@ def setupLogging():
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
-    # create console handler with a higher log level
+    # # create console handler with a higher log level
     # ch = logging.StreamHandler()
     # ch.setLevel(logging.ERROR)
     # ch.setFormatter(formatter)
@@ -177,6 +177,21 @@ def get_dates(filePath, fileName):
     # print(dates)
     return dates
 
+def checkAndMoveFile(filePath, target):
+    try:
+        Path(filePath).rename(target)
+        logger.info(formatMessage("SUCCESS", "checkAndMoveFile", filePath, target))  
+    except FileExistsError as fileExists:
+        return False, "FileExistsError"
+    except Exception as err:
+        statsDict["totalFailures"] += 1
+        logger.error(formatMessage("FAILURE", "checkAndMoveFile.move.Exception", filePath, target, "unable to process file", format(err)))
+        return False, "EXCEPTION"
+    return True, "SUCCESS"
+
+def createDuplicateFileName(fileName):
+    path = Path(fileName)
+    return str(path.with_name(f"{path.stem}_{'DUPLICATE'}_{uuid.uuid1()}{path.suffix}"))
 
 #moves files after creating target dreictory. It will prepend the target directory with any
 # string provided in preString parameter 
@@ -190,13 +205,54 @@ def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderNam
 
     targetDir = os.path.join(targetBaseDir, mediaDateTime.strftime("%Y"), dirName)
     Path(targetDir).mkdir(parents=True, exist_ok=True)
-    target = os.path.join(targetDir,file)    
-    try:
-        Path(filePath).rename(target)
-        logger.info(formatMessage("SUCCESS", "moveFile", filePath, target))  
-    except Exception as err:
-        statsDict["totalFailures"] += 1
-        logger.error(formatMessage("FAILURE", "moveFile.move.Exception", filePath, target, "unable to process file", format(err)))         
+    target = os.path.join(targetDir,file) 
+
+    moveSuccess, errorCode = checkAndMoveFile(filePath, target)
+    
+    if not moveSuccess:
+        #failed to move file. is it due to file already exising?
+        if errorCode == "FileExistsError" :
+            #file already exists. Try moving it to duplicates folder
+            duplicatesFolder = os.path.join(targetBaseDir, "duplicates")
+            targetDir = os.path.join(duplicatesFolder, mediaDateTime.strftime("%Y"), dirName)
+            Path(targetDir).mkdir(parents=True, exist_ok=True)
+            target = os.path.join(targetDir, file)  
+            moveSuccess, errorCode = checkAndMoveFile(filePath, target)
+            if not moveSuccess:
+                # failed to move file. File exists in duplicate folder too
+                # is it due to file already exising even under duplicates folder
+                if errorCode == "FileExistsError" :
+                    # yeah. the file exists there too. lets jus add date time stamp to file name and try again
+                    target = createDuplicateFileName(target)
+                    moveSuccess, errorCode = checkAndMoveFile(filePath, target)
+                    if not moveSuccess:
+                        #failed again . log and move on
+                        logger.error(formatMessage("FAILURE", "moveFile.move.Exception", filePath, target, "unable to process file", "Exception logged already"))
+                    
+                
+                            
+
+
+
+
+
+
+    # Path(filePath).rename(target)
+
+    # try:
+    #     Path(filePath).rename(target)
+    #     logger.info(formatMessage("SUCCESS", "moveFile", filePath, target))  
+    # except FileExistsError as fileExists:
+    #     # file already exists in the target folder. Lets try moving it to same hierarchy under duplicates folder. 
+    #     duplicatesFolder = targetBaseDir + datetime.datetime.now().strftime(dateTimeFormat)
+    #     Path(duplicatesFolder).mkdir(parents=True, exist_ok=True)
+    #     try:
+    #         target = os.path.join(duplicatesFolder, file)  
+    #         Path(filePath).rename(target)
+    #         logger.info(formatMessage("SUCCESS", "moveFile", filePath, target, "Target existed. Moved to duplicates folder"))  
+    #     except FileExistsError as fileExists:
+
+            
         
     
 
@@ -473,7 +529,7 @@ def getExecutionTime(endTime=""):
     mins, secs = divmod(executionTime, 60)
     hours, mins = divmod(mins, 60)
 
-    return ("%d:%d:%d\n" % (hours, mins, secs))
+    return ("%d:%d:%d" % (hours, mins, secs))
 
 def printStatistics():
     
@@ -528,7 +584,8 @@ def printStatistics():
 
 @periodic_task(1)
 def printProgressStatus():
-    print("\rDirectories scanned = {0}, files procssed = {1}, time = (HH:MM:SS) {2}  ".format(statsDict["totalDirProcessed"], statsDict["totalFilesProcessed"], getExecutionTime(timeit.default_timer()) ), end="")
+    msg = "\rDirectories scanned = {0}, files procssed = {1}, time = (HH:MM:SS) {2}  ".format(statsDict["totalDirProcessed"], statsDict["totalFilesProcessed"], getExecutionTime(timeit.default_timer()))
+    print(msg, end="")
 
 
 
