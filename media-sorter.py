@@ -170,6 +170,7 @@ def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderNam
         Path(filePath).rename(target)
         logger.info(formatMessage("SUCCESS", "moveFile", filePath, target))  
     except Exception as err:
+        statsDict["totalFailures"] += 1
         logger.error(formatMessage("FAILURE", "moveFile.move.Exception", filePath, target, "unable to process file", format(err)))         
         
     
@@ -304,7 +305,7 @@ def sortByDate(root, file, filePath, dates):
 
 
 # Runs through all the files in a given source directory and processes it one by one    
-def processMedia(configFile):
+def processMedia(configFile, useConfigFile):
 
     for root, subdirs, files in os.walk(sourceDir):
         for file in os.listdir(root):
@@ -315,15 +316,16 @@ def processMedia(configFile):
                 statsDict["totalFilesProcessed"] += 1
                 dates = get_dates(filePath, file)
                 # print(dates)
-                if(moveBySpecialDay(root, file, filePath, dates)):
-                    statsDict["totalSortedOnSpecialDate"] += 1
-                    continue
-                if(sortOnRange(root, file, filePath, dates)):
-                    statsDict["totalSortedOnRange"] += 1
-                    continue
-                if(moveByRecurringDay(root, file, filePath, dates)):
-                    statsDict["totalSortedOnRecurringDate"] += 1
-                    continue
+                if useConfigFile :
+                    if(moveBySpecialDay(root, file, filePath, dates)):
+                        statsDict["totalSortedOnSpecialDate"] += 1
+                        continue
+                    if(sortOnRange(root, file, filePath, dates)):
+                        statsDict["totalSortedOnRange"] += 1
+                        continue
+                    if(moveByRecurringDay(root, file, filePath, dates)):
+                        statsDict["totalSortedOnRecurringDate"] += 1
+                        continue
                 if(sortByDate(root, file, filePath, dates)):
                     statsDict["totalSortedOnDate"] += 1
                     continue          
@@ -337,10 +339,14 @@ def readConfiguration():
     
     configFile = os.path.join(os.path.dirname(os.path.realpath(__file__)), configFileName)
     if not os.path.isfile(configFile):
-        logger.warning(formatMessage("WARNING", "readConfiguration", configFile, "", "Configuration file does not exist in default location. Trying under source directory "))
+        logger.info(formatMessage("INFORMATION", "readConfiguration", configFile, "", "Configuration file does not exist in default location. Trying under source directory "))
         configFile = os.path.join(sourceDir, configFileName)
         if not os.path.isfile(configFile):
-            logger.error(formatMessage("FAILURE", "readConfiguration", configFile, "", "Configuration file does not exist. Existing script"))
+            configFile = ""
+            msg = "Config  - NOT FOUND. Files will be sorted based only on dates. order of precedence is exif_date > creation_date > modification_date"
+            logger.info(formatMessage("INFORMATION", "readConfiguration", configFile, "", msg))
+            print(msg)
+            
             return configFile, False
     
     logger.info(formatMessage("SUCCESS", "readConfiguration", configFile, "", "Found Configuration file"))
@@ -429,7 +435,6 @@ def init():
     "totalSortedOnRecurringDate" : 0,
     "totalSortedOnDate" : 0,
     "totalSortedOnRange" : 0
-
     }
     return statsDict
 
@@ -454,6 +459,14 @@ def printStatistics():
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
+    msg = "successfully sorted - {0}".format(statsDict["totalFilesProcessed"] - statsDict["totalFailures"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
+    msg = "sorting failures - {0}".format(statsDict["totalFailures"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
     msg = "count of media files sorted based on special date - {0}".format(statsDict["totalSortedOnSpecialDate"])
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
@@ -475,10 +488,6 @@ def printStatistics():
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
     msg = "count of media files having INVALID Exif data  - {0}".format(statsDict["totalMissingExif"])
-    print(msg)
-    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
-
-    msg = "total sorting failures - {0}".format(statsDict["totalFailures"])
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
@@ -510,14 +519,14 @@ if __name__ == "__main__":
     logger.info(formatMessage("SUCCESS", "__main__", str(targetBaseDir), "", "Target directory set"))
 
     # read configuration
-    configFile, configStatus = readConfiguration()
-    if configStatus:
-        printProgressStatus()
-        # process all media files
-        processMedia(configFile)
+    configFile, useConfigFile = readConfiguration()
+    # if configStatus:
+    printProgressStatus()
+    # process all media files
+    processMedia(configFile, useConfigFile)
 
-    else:
-        logger.error(formatMessage("FAILURE", "__main__", "", "", "Couldn't load configuration file. exiting..."))
+    # else:
+    #     logger.error(formatMessage("FAILURE", "__main__", "", "", "Couldn't load configuration file. exiting..."))
     
     #print statistics
     printStatistics()
