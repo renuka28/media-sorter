@@ -92,6 +92,58 @@ def get_field (exif,field) :
      if TAGS.get(k) == field:
         return v
 
+# extracts exif info from image files (jpg, png)
+def getImageExif(filePath):
+    date_taken = ""
+    try:
+        with Image.open(filePath) as im:
+            exif =  im._getexif()
+            if exif is None:
+                logger.error(formatMessage("FAILURE", "get_dates.Image.exif.None", filePath, "", "image has no exif information"))  
+            elif DATE_TIME_ORIG_TAG in exif:
+                datestr = exif[DATE_TIME_ORIG_TAG]
+                date_taken  = datetime.datetime.strptime(datestr, "%Y:%m:%d %H:%M:%S")
+    except Exception as err:
+        logger.error(formatMessage("FAILURE", "get_dates.Image.Exception", filePath, "", "unable to read exif information", format(err)))  
+        statsDict["totalMissingExif"] += 1
+        # print(traceback.print_exc())
+    return date_taken
+
+# extracts exif info from image files (heic)
+def getHeicExif(filePath):
+    date_taken = ""
+    with open(filePath, 'rb') as heicFile:
+            tags = exifread.process_file(heicFile)
+            if heicDateTimeKey in tags.keys():                
+                date_taken= datetime.datetime.strptime(str(tags[heicDateTimeKey]), "%Y:%m:%d %H:%M:%S")
+    return date_taken
+
+# extracts exif info from movie files ('m4v', 'mov', 'mp4')
+def getVideoExif(filePath):
+    date_taken = ""
+    try:
+        parser = createParser(filePath)
+        if parser:
+            with parser:
+                try:
+                    metadata = extractMetadata(parser)
+                except Exception as err:
+                    logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "exception while reading exif information", format(err)))
+                    statsDict["totalMissingExif"] += 1
+                    metadata = None
+            if metadata:
+                date_taken = metadata.get('creation_date')
+            else:
+                logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))
+        else:
+            logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "unable to read exif information"))
+            statsDict["totalMissingExif"] += 1   
+    except Exception as err:
+        logger.error(formatMessage("FAILURE", "get_dates.createParser.Exception", filePath, "", "unable to create parser", format(err)))  
+  
+    return date_taken
+
+
 # extracts dates from the media files. We retrive creation date, modification and date taken
 def get_dates(filePath, fileName):
     dates = {}
@@ -104,47 +156,13 @@ def get_dates(filePath, fileName):
    # for supported image files lets extract exif information
     fileExtension = os.path.splitext(fileName)[1][1:].lower()
     if fileExtension in imgFormats:  
-        try:
-            with Image.open(filePath) as im:
-                exif =  im._getexif()
-                if exif is None:
-                    logger.error(formatMessage("FAILURE", "get_dates.Image.exif.None", filePath, "", "image has no exif information"))  
-                elif DATE_TIME_ORIG_TAG in exif:
-                    datestr = exif[DATE_TIME_ORIG_TAG]
-                    dates["date_taken"]  = datetime.datetime.strptime(datestr, "%Y:%m:%d %H:%M:%S")
-        except Exception as err:
-            logger.error(formatMessage("FAILURE", "get_dates.Image.Exception", filePath, "", "unable to read exif information", format(err)))  
-            statsDict["totalMissingExif"] += 1
-            # print(traceback.print_exc())
+        dates["date_taken"] = getImageExif(filePath)  
     # check for heic file
     elif fileExtension == "heic":
-        with open(filePath, 'rb') as heicFile:
-            tags = exifread.process_file(heicFile)
-            if heicDateTimeKey in tags.keys():                
-                dates["date_taken"] = datetime.datetime.strptime(str(tags[heicDateTimeKey]), "%Y:%m:%d %H:%M:%S")
-    
+        dates["date_taken"] = getHeicExif(filePath)
     # for supported video files lets extract metatdata
     elif fileExtension in videoFormats:
-        try:
-            parser = createParser(filePath)
-            if parser:
-                with parser:
-                    try:
-                        metadata = extractMetadata(parser)
-                    except Exception as err:
-                        logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "exception while reading exif information", format(err)))
-                        statsDict["totalMissingExif"] += 1
-                        metadata = None
-                if metadata:
-                    dates["date_taken"]  = metadata.get('creation_date')
-                else:
-                    logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))
-            else:
-                logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "unable to read exif information"))
-                statsDict["totalMissingExif"] += 1   
-        except Exception as err:
-            logger.error(formatMessage("FAILURE", "get_dates.createParser.Exception", filePath, "", "unable to create parser", format(err)))  
-  
+        dates["date_taken"] = getVideoExif(filePath)
     #everything else just defaults to creation date
     else:
         logger.error(formatMessage("FAILURE", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))
@@ -181,8 +199,6 @@ def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderNam
         logger.error(formatMessage("FAILURE", "moveFile.move.Exception", filePath, target, "unable to process file", format(err)))         
         
     
-
-
 
 
 # generic date comparer method. It will compare dates in MM/DD format by default
@@ -518,35 +534,22 @@ if __name__ == "__main__":
     print("Source - ", sourceDir)
     print("Target - ", targetBaseDir)
 
+    # setup statistics gathering
     statsDict = init()
 
-    # setup loggin
+    # setup logging
     logger, logFile = setupLogging()  
     logger.info(formatMessage("SUCCESS", "__main__", str(sourceDir), "", "Source directory set"))
     logger.info(formatMessage("SUCCESS", "__main__", str(targetBaseDir), "", "Target directory set"))
 
     # read configuration
     configFile, useConfigFile = readConfiguration()
-    # if configStatus:
-    printProgressStatus()
+    
     # process all media files
+    printProgressStatus()
     processMedia(configFile, useConfigFile)
 
-    # else:
-    #     logger.error(formatMessage("FAILURE", "__main__", "", "", "Couldn't load configuration file. exiting..."))
-    
     #print statistics
     printStatistics()
 
     print("Find complete summary in log file - ", logFile)
-
-
-    
-    
-    
-
-
-    
-
-
-
