@@ -213,6 +213,7 @@ def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderNam
     if not moveSuccess:
         #failed to move file. is it due to file already exising?
         if errorCode == "FileExistsError" :
+            statsDict["totalDuplicates"] += 1
             #file already exists. Try moving it to duplicates folder
             duplicatesFolder = os.path.join(targetBaseDir, "duplicates")
             targetDir = os.path.join(duplicatesFolder, mediaDateTime.strftime("%Y"), dirName)
@@ -231,32 +232,6 @@ def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderNam
                         logger.error(formatMessage("FAILURE", "moveFile.move.Exception", filePath, target, "unable to process file", "Exception logged already"))
                     
                 
-                            
-
-
-
-
-
-
-    # Path(filePath).rename(target)
-
-    # try:
-    #     Path(filePath).rename(target)
-    #     logger.info(formatMessage("SUCCESS", "moveFile", filePath, target))  
-    # except FileExistsError as fileExists:
-    #     # file already exists in the target folder. Lets try moving it to same hierarchy under duplicates folder. 
-    #     duplicatesFolder = targetBaseDir + datetime.datetime.now().strftime(dateTimeFormat)
-    #     Path(duplicatesFolder).mkdir(parents=True, exist_ok=True)
-    #     try:
-    #         target = os.path.join(duplicatesFolder, file)  
-    #         Path(filePath).rename(target)
-    #         logger.info(formatMessage("SUCCESS", "moveFile", filePath, target, "Target existed. Moved to duplicates folder"))  
-    #     except FileExistsError as fileExists:
-
-            
-        
-    
-
 
 # generic date comparer method. It will compare dates in MM/DD format by default
 # if includeYearsInComparison set to True it will use the date format YYYY/MM/DD 
@@ -508,6 +483,7 @@ def init():
     "totalDirProcessed":0,
     "totalFailures" : 0,
     "totalMissingExif" : 0,
+    "totalDuplicates" : 0,
     "totalProcessedOnExifDate" : 0,
     "totalProcessedOnModifiedDate" : 0,
     "totalProcessedOnCreationDate" : 0,
@@ -552,6 +528,10 @@ def printStatistics():
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
+    msg = "count of duplicates - {0}".format(statsDict["totalDuplicates"])
+    print(msg)
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
+
     msg = "count of media files sorted based on special date - {0}".format(statsDict["totalSortedOnSpecialDate"])
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
@@ -579,7 +559,9 @@ def printStatistics():
     statsDict["endTime"] = timeit.default_timer()
     msg = "total exeuction time (HH:MM:SS) - {0} ".format(getExecutionTime())
     print(msg)
-    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))   
+    logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))  
+
+    print()
 
     return
 
@@ -615,4 +597,4 @@ if __name__ == "__main__":
     #print statistics
     printStatistics()
 
-    print("Find complete summary in log file - ", logFile)
+    print("Find complete summary in log file - ", logFile, "\n")
