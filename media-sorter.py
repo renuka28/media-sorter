@@ -8,6 +8,7 @@ from hachoir.metadata import extractMetadata
 from pathlib import Path
 import logging, traceback
 import timeit
+import exifread
 from threading import Timer
 from time import sleep
 from periodic import periodic_task
@@ -32,6 +33,7 @@ overwriteFiles = True
 
 #supported image formats
 imgFormats = ['png', 'jpg', 'jpeg']
+heicDateTimeKey = 'EXIF DateTimeOriginal'
 #supported video formats
 videoFormats = ['m4v', 'mov', 'mp4']
 
@@ -51,8 +53,6 @@ recurringDays = []
 specialDays = []
 dateRanges = []
 statsDict = {}
-
-
 
 
 
@@ -116,6 +116,13 @@ def get_dates(filePath, fileName):
             logger.error(formatMessage("FAILURE", "get_dates.Image.Exception", filePath, "", "unable to read exif information", format(err)))  
             statsDict["totalMissingExif"] += 1
             # print(traceback.print_exc())
+    # check for heic file
+    elif fileExtension == "heic":
+        with open(filePath, 'rb') as heicFile:
+            tags = exifread.process_file(heicFile)
+            if heicDateTimeKey in tags.keys():                
+                dates["date_taken"] = datetime.datetime.strptime(str(tags[heicDateTimeKey]), "%Y:%m:%d %H:%M:%S")
+    
     # for supported video files lets extract metatdata
     elif fileExtension in videoFormats:
         try:
@@ -450,8 +457,8 @@ def getExecutionTime():
 def printStatistics():
     
     # print("\nHere are the statsDict ... \n",statsDict, "\n")
-    
-    msg = "\ntotal directories processed - {0}".format(statsDict["totalDirProcessed"])
+    print()
+    msg = "total directories processed - {0}".format(statsDict["totalDirProcessed"])
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
