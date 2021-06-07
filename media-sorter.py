@@ -123,23 +123,25 @@ def getVideoExif(filePath):
     date_taken = ""
     try:
         parser = createParser(filePath)
-        if parser:
-            with parser:
-                try:
-                    metadata = extractMetadata(parser)
-                except Exception as err:
-                    logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "exception while reading exif information", format(err)))
-                    statsDict["totalMissingExif"] += 1
-                    metadata = None
-            if metadata:
-                date_taken = metadata.get('creation_date')
-            else:
-                logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))
+        if not parser:
+            logger.error(formatMessage("FAILURE", "getVideoExif.hachoir.parser", filePath, "", "Unable to create parser. Unable to read exif information"))
+            statsDict["totalMissingExif"] += 1
+            return date_taken
+
+        with parser:
+            try:
+                metadata = extractMetadata(parser)
+            except Exception as err:
+                logger.error(formatMessage("FAILURE", "getVideoExif.hachoir.parser", filePath, "", "exception while reading exif information", format(err)))
+                statsDict["totalMissingExif"] += 1
+                metadata = None
+        if metadata:
+            date_taken = metadata.get('creation_date')
         else:
-            logger.error(formatMessage("FAILURE", "get_dates.hachoir.parser", filePath, "", "unable to read exif information"))
-            statsDict["totalMissingExif"] += 1   
+            logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))    
+           
     except Exception as err:
-        logger.error(formatMessage("FAILURE", "get_dates.createParser.Exception", filePath, "", "unable to create parser", format(err)))  
+        logger.error(formatMessage("FAILURE", "getVideoExif.createParser.Exception", filePath, "", "unable to create parser", format(err)))  
   
     return date_taken
 
@@ -168,7 +170,6 @@ def get_dates(filePath, fileName):
         logger.error(formatMessage("FAILURE", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))
         statsDict["totalMissingExif"] += 1
     
-  
     if dates["date_taken"] == datetime.datetime(1904, 1, 1):
         #invalid exif information. ignore it
         logger.warning(formatMessage("WARNING", "get_dates", filePath, "", "invalid exif information (1904/01/01). ignoring it", ""))  
@@ -563,7 +564,7 @@ def printStatistics():
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
-    msg = "count of media files sorted based on date - {0} [based on exif date ({1}) + creation date ({2}) + modification date ({3})]".format(statsDict["totalSortedOnDate"], statsDict["totalProcessedOnExifDate"], statsDict["totalProcessedOnCreationDate"], statsDict["totalProcessedOnModifiedDate"])
+    msg = "count of media files sorted based on date - {0} [based on exif date ({1}) + modification date ({2}) + creation date ({3})]".format(statsDict["totalSortedOnDate"], statsDict["totalProcessedOnExifDate"], statsDict["totalProcessedOnModifiedDate"], statsDict["totalProcessedOnCreationDate"])
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
