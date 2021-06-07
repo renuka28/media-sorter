@@ -39,7 +39,7 @@ videoFormats = ['m4v', 'mov', 'mp4']
 
 #Log configurations
 loggerName = "media-sorter-log"
-logFileName = loggerName + ".csv"
+baseLogFileName = loggerName + ".csv"
 logFileHeader = ['Result', 'From', 'To']
 logger = ""
 
@@ -60,7 +60,7 @@ def formatMessage(status, source, sourceFile, targetFile="", additonalInfo="", e
     return status + "," + source + "," + sourceFile + "," + targetFile + "," + additonalInfo + "," + exceptionMsg
 
 def setupLogging():
-    
+    logFileName = datetime.datetime.now().strftime(dateTimeFormat) + "-" + baseLogFileName
     logFile = os.path.join(targetBaseDir, logFileName)    
     print("Logfile -", logFile)
 
