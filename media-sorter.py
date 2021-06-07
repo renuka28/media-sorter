@@ -461,8 +461,13 @@ def init():
     }
     return statsDict
 
-def getExecutionTime():
-    executionTime = statsDict["endTime"] - statsDict["startTime"]
+# calculates and returns a formatted execution time
+# if endTime is given then it will use that. Otherwise it will retreive the end time from statistics dictionary
+# endtime is timeit.default_timer()
+def getExecutionTime(endTime=""):
+    if endTime == "":
+        endTime = statsDict["endTime"] 
+    executionTime = endTime - statsDict["startTime"]
 
     # output running time in a nice format.
     mins, secs = divmod(executionTime, 60)
@@ -523,7 +528,7 @@ def printStatistics():
 
 @periodic_task(1)
 def printProgressStatus():
-    print("\rDirectories processed = {0}, files procssed = {1}...".format(statsDict["totalDirProcessed"], statsDict["totalFilesProcessed"]), end="")
+    print("\rDirectories scanned = {0}, files procssed = {1}, time = (HH:MM:SS) {2}  ".format(statsDict["totalDirProcessed"], statsDict["totalFilesProcessed"], getExecutionTime(timeit.default_timer()) ), end="")
 
 
 
