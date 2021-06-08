@@ -107,10 +107,13 @@ def getImageExif(filePath):
                 tag = DATE_TIME_ORIGINAL_TAG
             elif DATE_TIME_DIGITIZED_TAG in exif:   
                 tag = DATE_TIME_DIGITIZED_TAG         
-
+            
             if(tag != -1):
-                datestr = exif[tag]
-                print("\n datestr = ***{0}*** and length = {1}\n".format(datestr, len(datestr)))
+                datestr = exif[tag]            
+                if '\x00' in datestr:
+                    # '\x00'at the end causes the strptime to fail
+                    # tried rstrip and for some reason it is not working.. 
+                    datestr =''.join(datestr.split('\x00'))                
                 date_taken  = datetime.datetime.strptime(datestr, "%Y:%m:%d %H:%M:%S")
             else:
                 logger.error(formatMessage("FAILURE", "getImageExif.Image.exif.None", filePath, "", "image has exif information but neither 'DateTimeOriginal' nor 'DateTimeDigitized' present in exif"))  
