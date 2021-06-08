@@ -278,22 +278,29 @@ def sortRecurringAndSpecialDayFiles(root, file, filePath, dates, isSpecialDay):
     if(isSpecialDay):
         dateList = specialDays
 
-    poiDay = checkDay(dateList, dates["date_taken"], isSpecialDay)
-    if(len(poiDay) > 0):
-        moveFile(filePath, file, poiDay[0]['dirName'], dates["date_taken"], True)
-        return True
+    if dates["date_taken"] != "" :
+        # we have exif data. We will only use this for our range comparision.
+        # if exif date taken is present and does not fall in range, we don't use
+        # creation and modification dates for range check. If date_taken is not present
+        # then the media will be sorted based on date
+        # check if exif date taken falls in our range
+        poiDay = checkDay(dateList, dates["date_taken"], isSpecialDay)
+        if(len(poiDay) > 0):
+            moveFile(filePath, file, poiDay[0]['dirName'], dates["date_taken"], True)
+            return True
+    else :
+        # no exif date taken data. Lets try creation date and modification date
+        # check for creation date
+        poiDay = checkDay(dateList, dates["creation_date"], isSpecialDay)
+        if(len(poiDay) > 0):        
+            moveFile(filePath, file, poiDay[0]['dirName'], dates["creation_date"], True)
+            return True
     
-    #check for modification date
-    poiDay = checkDay(dateList, dates["modification_date"], isSpecialDay)
-    if(len(poiDay) > 0):
-        moveFile(filePath, file, poiDay[0]['dirName'], dates["modification_date"], True)
-        return True
-    
-    #finally check for creation date
-    poiDay = checkDay(dateList, dates["creation_date"], isSpecialDay)
-    if(len(poiDay) > 0):        
-        moveFile(filePath, file, poiDay[0]['dirName'], dates["creation_date"], True)
-        return True
+        #finally check for modification date
+        poiDay = checkDay(dateList, dates["modification_date"], isSpecialDay)
+        if(len(poiDay) > 0):
+            moveFile(filePath, file, poiDay[0]['dirName'], dates["modification_date"], True)
+            return True
     
     return False
 
@@ -323,10 +330,18 @@ def isInRange(dateRanges, dateToCheck):
 
 def sortOnRange(root, file, filePath, dates):
 
-    #check if exif date taken falls in our range
-    dateRange = isInRange(dateRanges, dates["date_taken"])
-    if(len(dateRange) == 0):
-        #may be creation dates falls within given range
+    if dates["date_taken"] != "" :
+        # we have exif data. We will only use this for our range comparision.
+        # if exif date taken is present and does not fall in range, we don't use
+        # creation and modification dates for range check. If date_taken is not present
+        # then the media will be sorted based on date
+        # check if exif date taken falls in our range
+        dateRange = isInRange(dateRanges, dates["date_taken"])
+        if(len(dateRange) == 0):
+            #exif date taken does not fall in range. Return false
+            return False
+    else:
+        # no exif date taken data. Lets try creation date and modification date
         dateRange = isInRange(dateRanges, dates["creation_date"])
         if(len(dateRange) == 0):
             #finally lets try if modification date atleast falls in the given range
@@ -337,7 +352,6 @@ def sortOnRange(root, file, filePath, dates):
                 # msg = msg + " and " + str(dates["creation_date"]) 
                 # msg = msg + " and " + str(dates["modification_date"])
                 # msg = msg + " not in range"
-
                 # logger.info(formatMessage("INFO", "sortOnRange", filePath, "", msg))
                 return False
 
@@ -390,12 +404,13 @@ def processMedia(configFile, useConfigFile):
                     if(moveBySpecialDay(root, file, filePath, dates)):
                         statsDict["totalSortedOnSpecialDate"] += 1
                         continue
-                    if(sortOnRange(root, file, filePath, dates)):
-                        statsDict["totalSortedOnRange"] += 1
-                        continue
                     if(moveByRecurringDay(root, file, filePath, dates)):
                         statsDict["totalSortedOnRecurringDate"] += 1
                         continue
+                    if(sortOnRange(root, file, filePath, dates)):
+                        statsDict["totalSortedOnRange"] += 1
+                        continue
+           
                 if(sortByDate(root, file, filePath, dates)):
                     statsDict["totalSortedOnDate"] += 1
                     continue          
@@ -466,7 +481,7 @@ def printHelp():
     print("type indicate what kind of entry particular line is. Allowe values or 'recurringDay', 'specialDay' and 'range'")
     print("\ntype 'recurringDay' requires only from column with date fromat MM/DD. All files with any one of date taken, creation or modification date are moved to its own directory with name provided in 'dirName' column prepended by its year")
     print("\ntype 'specialDay' requires only from column with date fromat YYYY/MM/DD. All files with any one of date taken, creation or modification date are moved to its own directory with name provided in 'dirName' column")
-    print("\ntype 'range' requires from and to column with date fromat YYYY/MM/DD. All files with any one of date taken, creation or modification date falling within the given range are moved to its own directory with name provided in 'dirName' column\n")
+    print("\ntype 'range' requires from and to column with date fromat YYYY/MM/DD. All files with any one of date taken, creation or modification date (exif_date > creation_date > modification_date) falling within the given range are moved to its own directory with name provided in 'dirName' column\n")
     print("     usage:")
     print("     media-sorter <source-directory> <target-directory>")
     print("     <source-directory> defaults to current directory")
@@ -559,7 +574,7 @@ def printStatistics():
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
-    msg = "count of media files sorted based on date - {0} [based on exif date ({1}) + modification date ({2}) + creation date ({3})]".format(statsDict["totalSortedOnDate"], statsDict["totalProcessedOnExifDate"], statsDict["totalProcessedOnModifiedDate"], statsDict["totalProcessedOnCreationDate"])
+    msg = "count of media files sorted based on date - {0} [based on exif date ({1}) + creation date ({2}) + modification date ({3})]".format(statsDict["totalSortedOnDate"], statsDict["totalProcessedOnExifDate"], statsDict["totalProcessedOnCreationDate"], statsDict["totalProcessedOnModifiedDate"])
     print(msg)
     logger.info(formatMessage("SUCCESS", "printStatistics", msg, "", ""))
 
