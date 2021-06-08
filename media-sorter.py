@@ -264,19 +264,19 @@ def sortRecurringAndSpecialDayFiles(root, file, filePath, dates, isSpecialDay):
         dateList = specialDays
 
     poiDay = checkDay(dateList, dates["date_taken"], isSpecialDay)
-    if(len(poiDay) == 1):
+    if(len(poiDay) > 0):
         moveFile(filePath, file, poiDay[0]['dirName'], dates["date_taken"], True)
         return True
     
     #check for modification date
     poiDay = checkDay(dateList, dates["modification_date"], isSpecialDay)
-    if(len(poiDay) == 1):
+    if(len(poiDay) > 0):
         moveFile(filePath, file, poiDay[0]['dirName'], dates["modification_date"], True)
         return True
     
     #finally check for creation date
     poiDay = checkDay(dateList, dates["creation_date"], isSpecialDay)
-    if(len(poiDay) == 1):        
+    if(len(poiDay) > 0):        
         moveFile(filePath, file, poiDay[0]['dirName'], dates["creation_date"], True)
         return True
     
