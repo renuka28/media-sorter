@@ -1,5 +1,5 @@
 # TODO dont create target folder inside source folder
-import os, os.path, time, sys, datetime, csv, time, uuid
+import os, os.path, time, sys, datetime, csv, time, uuid, pprint
 from os import close, error, stat
 from PIL import Image
 from PIL.ExifTags import TAGS
@@ -26,7 +26,8 @@ dateYearMonthFormat = "%Y-%m"
 configYMDFormat = '%Y/%m/%d'
 configMDFormat = '%m/%d'
 #date time tag in exif
-DATE_TIME_ORIG_TAG = 36867
+DATE_TIME_ORIGINAL_TAG = 36867
+DATE_TIME_DIGITIZED_TAG = 36868
 
 # we will overwrite the target files by default
 overwriteFiles = True
@@ -99,12 +100,23 @@ def getImageExif(filePath):
         with Image.open(filePath) as im:
             exif =  im._getexif()
             if exif is None:
-                logger.error(formatMessage("FAILURE", "get_dates.Image.exif.None", filePath, "", "image has no exif information"))  
-            elif DATE_TIME_ORIG_TAG in exif:
-                datestr = exif[DATE_TIME_ORIG_TAG]
+                logger.error(formatMessage("FAILURE", "getImageExif.Image.exif.None", filePath, "", "image has no exif information"))  
+                return date_taken
+            tag = -1
+            if DATE_TIME_ORIGINAL_TAG in exif:
+                tag = DATE_TIME_ORIGINAL_TAG
+            elif DATE_TIME_DIGITIZED_TAG in exif:   
+                tag = DATE_TIME_DIGITIZED_TAG         
+
+            if(tag != -1):
+                datestr = exif[tag]
+                print("\n datestr = ***{0}*** and length = {1}\n".format(datestr, len(datestr)))
                 date_taken  = datetime.datetime.strptime(datestr, "%Y:%m:%d %H:%M:%S")
+            else:
+                logger.error(formatMessage("FAILURE", "getImageExif.Image.exif.None", filePath, "", "image has exif information but neither 'DateTimeOriginal' nor 'DateTimeDigitized' present in exif"))  
+                return date_taken
     except Exception as err:
-        logger.error(formatMessage("FAILURE", "get_dates.Image.Exception", filePath, "", "unable to read exif information", format(err)))  
+        logger.error(formatMessage("FAILURE", "getImageExif.Image.Exception", filePath, "", "unable to read exif information", format(err.with_traceback)))  
         statsDict["totalMissingExif"] += 1
         # print(traceback.print_exc())
     return date_taken
@@ -167,7 +179,7 @@ def get_dates(filePath, fileName):
         dates["date_taken"] = getVideoExif(filePath)
     #everything else just defaults to creation date
     else:
-        logger.error(formatMessage("FAILURE", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))
+        logger.info(formatMessage("Information", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))
         statsDict["totalMissingExif"] += 1
     
     if dates["date_taken"] == datetime.datetime(1904, 1, 1):
