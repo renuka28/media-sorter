@@ -16,6 +16,7 @@ from periodic import periodic_task
 # test source and target directories
 sourceDir = "S:\\Renuka\\Renuka-Data\\Personal\\learning\\python\\source\\test\\source"
 targetBaseDir = "S:\\Renuka\\Renuka-Data\\Personal\\learning\\python\\source\\test\\target"
+duplicatesBaseDir = "S:\\Renuka\\Renuka-Data\\Personal\\learning\\python\\source\\test\\target\\duplicates"
 defaultTargetDir = "sorted-media"
 
 # default date format
@@ -30,6 +31,9 @@ DATE_TIME_DIGITIZED_TAG = 36868
 
 # we will overwrite the target files by default
 overwriteFiles = True
+
+# duplicates tag. we will append this text along with an UUID to rename a duplicate file
+duplicate_tag = "_DUPLICATE_"
 
 #supported image formats
 imgFormats = ['png', 'jpg', 'jpeg']
@@ -205,8 +209,14 @@ def checkAndMoveFile(filePath, target):
     return True, "SUCCESS"
 
 def createDuplicateFileName(fileName):
-    path = Path(fileName)
-    return str(path.with_name(f"{path.stem}_{'DUPLICATE'}_{uuid.uuid1()}{path.suffix}"))
+    path = Path(fileName)    
+    fileStem = path.stem
+    # if filename already contains duplicate tag, remove it add a new UUID
+    if duplicate_tag in path.stem:
+        fileStem = fileStem.partition(duplicate_tag)[0]
+        print("duplicate file stem = ", fileStem)
+
+    return str(path.with_name(f"{fileStem}{duplicate_tag}{uuid.uuid1()}{path.suffix}"))
 
 #moves files after creating target dreictory. It will prepend the target directory with any
 # string provided in preString parameter 
@@ -217,9 +227,16 @@ def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderNam
 
     if additionalFolderPrefix != "":
         dirName = additionalFolderPrefix + "-" + dirName
-
-    targetDir = os.path.join(targetBaseDir, mediaDateTime.strftime("%Y"), dirName)
+    # if the file is the file which was sorted earlier by us as duplicate, then move it to 
+    # duplicates folder again
+    if duplicate_tag in file:
+        # statsDict["totalDuplicates"] += 1
+        targetDir = os.path.join(duplicatesBaseDir, mediaDateTime.strftime("%Y"), dirName)
+    else:
+        targetDir = os.path.join(targetBaseDir, mediaDateTime.strftime("%Y"), dirName)        
+    #create targetDir if it does not exist
     Path(targetDir).mkdir(parents=True, exist_ok=True)
+    #finally create target file name
     target = os.path.join(targetDir,file) 
 
     moveSuccess, errorCode = checkAndMoveFile(filePath, target)
@@ -229,8 +246,7 @@ def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderNam
         if errorCode == "FileExistsError" :
             statsDict["totalDuplicates"] += 1
             #file already exists. Try moving it to duplicates folder
-            duplicatesFolder = os.path.join(targetBaseDir, "duplicates")
-            targetDir = os.path.join(duplicatesFolder, mediaDateTime.strftime("%Y"), dirName)
+            targetDir = os.path.join(duplicatesBaseDir, mediaDateTime.strftime("%Y"), dirName)
             Path(targetDir).mkdir(parents=True, exist_ok=True)
             target = os.path.join(targetDir, file)  
             moveSuccess, errorCode = checkAndMoveFile(filePath, target)
@@ -506,8 +522,10 @@ def readCmdLine():
         
     # create target directory
     Path(targetBaseDir).mkdir(parents=True, exist_ok=True)
+    # base folder for duplicates
+    duplicatesBaseDir = os.path.join(targetBaseDir, "duplicates")
     
-    return sourceDir, targetBaseDir
+    return sourceDir, targetBaseDir, duplicatesBaseDir
 
 def init():
     statsDict = {
@@ -608,10 +626,11 @@ def printProgressStatus():
 if __name__ == "__main__":    
     profile = False
 
-    sourceDir, targetBaseDir = readCmdLine()
+    sourceDir, targetBaseDir, duplicatesBaseDir = readCmdLine()
     print()
     print("Source - ", sourceDir)
     print("Target - ", targetBaseDir)
+    print("duplicates (if any) - ", duplicatesBaseDir)
 
     # setup statistics gathering
     statsDict = init()
@@ -620,6 +639,7 @@ if __name__ == "__main__":
     logger, logFile = setupLogging()  
     logger.info(formatMessage("SUCCESS", "__main__", str(sourceDir), "", "Source directory set"))
     logger.info(formatMessage("SUCCESS", "__main__", str(targetBaseDir), "", "Target directory set"))
+    logger.info(formatMessage("SUCCESS", "__main__", str(duplicatesBaseDir), "", "Target duplicates directory set"))
 
     # read configuration
     configFile, useConfigFile = readConfiguration()
