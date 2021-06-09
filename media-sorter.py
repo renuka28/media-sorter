@@ -601,9 +601,9 @@ def printProgressStatus():
     print(msg, end="")
 
 
-
 if __name__ == "__main__":    
-    # read command line
+    profile = False
+
     sourceDir, targetBaseDir = readCmdLine()
     print()
     print("Source - ", sourceDir)
@@ -622,9 +622,23 @@ if __name__ == "__main__":
     
     # process all media files
     printProgressStatus()
-    processMedia(configFile, useConfigFile)
+    
+    
+    if profile:
+        import cProfile, pstats
+        profiler = cProfile.Profile()
+        profiler.enable()
+        processMedia(configFile, useConfigFile)
+        profiler.disable()
+        stats = pstats.Stats(profiler).sort_stats('tottime')
+        # stats.strip_dirs()
+        stats.dump_stats('profile_data')        
+        stats.print_stats()   
+    else:
+        processMedia(configFile, useConfigFile)
 
-    #print statistics
+        #print statistics
     printStatistics()
 
     print("Find complete summary in log file - ", logFile, "\n")
+   
