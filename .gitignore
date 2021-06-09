@@ -130,3 +130,4 @@ dmypy.json
 
 # local files
 backup.py
+profile_data
