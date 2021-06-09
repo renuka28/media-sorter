@@ -1,4 +1,3 @@
-# TODO dont create target folder inside source folder
 import os, os.path, time, sys, datetime, csv, time, uuid, pprint
 from os import close, error, stat
 from PIL import Image
@@ -387,11 +386,21 @@ def sortByDate(root, file, filePath, dates):
     return True
 
 
+def removeEmptyDirs(sourceDir):
+    folders = sorted(list(os.walk(sourceDir))[1:],reverse=True)
+    for folder in folders:
+        try:
+            os.rmdir(folder[0])
+            logger.info(formatMessage("INFORMATION", "removeEmptyDirs", folder[0], "", "Empty folder deleted"))
+        except OSError as error: 
+            logger.error(formatMessage("ERROR-DIRECTORY", "removeEmptyDirs", folder[0], "", "Cannot delete folder"))
+
+
 
 # Runs through all the files in a given source directory and processes it one by one    
 def processMedia(configFile, useConfigFile):
 
-    for root, subdirs, files in os.walk(sourceDir):
+     for root, subdirs, files in os.walk(sourceDir):
         for file in os.listdir(root):
             filePath = os.path.join(root, file)
             if os.path.isdir(filePath) :
@@ -409,15 +418,10 @@ def processMedia(configFile, useConfigFile):
                         continue
                     if(sortOnRange(root, file, filePath, dates)):
                         statsDict["totalSortedOnRange"] += 1
-                        continue
-           
+                        continue           
                 if(sortByDate(root, file, filePath, dates)):
                     statsDict["totalSortedOnDate"] += 1
-                    continue          
-    print()
-
-
-
+                    continue  
 
 # reads configuration file and sets up internal data structures
 def readConfiguration():
@@ -637,8 +641,12 @@ if __name__ == "__main__":
     else:
         processMedia(configFile, useConfigFile)
 
-        #print statistics
+    
+    #print statistics
     printStatistics()
+    #remove all empty source folders
+    removeEmptyDirs(sourceDir)
+
 
     print("Find complete summary in log file - ", logFile, "\n")
    
