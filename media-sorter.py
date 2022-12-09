@@ -131,9 +131,13 @@ def getImageExif(filePath):
 def getHeicExif(filePath):
     date_taken = ""
     with open(filePath, 'rb') as heicFile:
+        try:
             tags = exifread.process_file(heicFile)
             if heicDateTimeKey in tags.keys():                
                 date_taken= datetime.datetime.strptime(str(tags[heicDateTimeKey]), "%Y:%m:%d %H:%M:%S")
+        except:
+            logger.error(formatMessage("FAILURE", "exifread.process_file", filePath, "", "exception while reading exif information", ""))
+           
     return date_taken
 
 # extracts exif info from movie files ('m4v', 'mov', 'mp4')
@@ -229,11 +233,12 @@ def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderNam
         dirName = additionalFolderPrefix + "-" + dirName
     # if the file is the file which was sorted earlier by us as duplicate, then move it to 
     # duplicates folder again
+    monthName = mediaDateTime.strftime("%m") + "-" + mediaDateTime.strftime("%b")
     if duplicate_tag in file:
         # statsDict["totalDuplicates"] += 1
-        targetDir = os.path.join(duplicatesBaseDir, mediaDateTime.strftime("%Y"), dirName)
+        targetDir = os.path.join(duplicatesBaseDir, mediaDateTime.strftime("%Y"), monthName, dirName)
     else:
-        targetDir = os.path.join(targetBaseDir, mediaDateTime.strftime("%Y"), dirName)        
+        targetDir = os.path.join(targetBaseDir, mediaDateTime.strftime("%Y"), monthName, dirName)        
     #create targetDir if it does not exist
     Path(targetDir).mkdir(parents=True, exist_ok=True)
     #finally create target file name
@@ -246,7 +251,7 @@ def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderNam
         if errorCode == "FileExistsError" :
             statsDict["totalDuplicates"] += 1
             #file already exists. Try moving it to duplicates folder
-            targetDir = os.path.join(duplicatesBaseDir, mediaDateTime.strftime("%Y"), dirName)
+            targetDir = os.path.join(duplicatesBaseDir, mediaDateTime.strftime("%Y"), monthName, dirName)
             Path(targetDir).mkdir(parents=True, exist_ok=True)
             target = os.path.join(targetDir, file)  
             moveSuccess, errorCode = checkAndMoveFile(filePath, target)
@@ -459,7 +464,7 @@ def readConfiguration():
     print("Config  -", configFile, "\n")
     with open(configFile, 'r') as data:      
         for line in csv.DictReader(data):
-            # print(line)
+            print(line)
             if "type" in line:
                 if line['type'] == 'recurringDay':
                     recurringDay = {}
@@ -666,7 +671,9 @@ if __name__ == "__main__":
     printStatistics()
     #remove all empty source folders
     removeEmptyDirs(sourceDir)
-
+    #copy configfile to target directory so we know what configuration was used to sort media
+    configInTargetDir = os.path.join(targetBaseDir, configFileName)
+    open(configInTargetDir, 'wb').write(open(configFile, 'rb').read())
 
     print("Find complete summary in log file - ", logFile, "\n")
    
