@@ -226,6 +226,10 @@ def createDuplicateFileName(fileName):
 # string provided in preString parameter 
 def moveFile(filePath, file, dirName, mediaDateTime, addMediaDateTimeToFolderName, additionalFolderPrefix=""):
 
+    dirName = dirName.strip()
+    dirName = dirName.title()
+    dirName = dirName.replace(' ', '-')
+    print(dirName)
     if(addMediaDateTimeToFolderName):
        dirName =  mediaDateTime.strftime(dateFormat) + "-" + dirName
 
