@@ -22,12 +22,13 @@ defaultTargetDir = "sorted-media"
 # default date format
 dateFormat = '%Y-%m-%d'
 dateTimeFormat = "%Y-%m-%d-%H-%M-%S"
-dateYearMonthFormat = "%Y-%m"
+dateYearMonthFormat = "%Y-%m-%d"
 configYMDFormat = '%Y/%m/%d'
 configMDFormat = '%m/%d'
 #date time tag in exif
 DATE_TIME_ORIGINAL_TAG = 36867
 DATE_TIME_DIGITIZED_TAG = 36868
+UTC_OFFSET_TIMEDELTA = datetime.datetime.utcnow() - datetime.datetime.now()
 
 # we will overwrite the target files by default
 overwriteFiles = True
@@ -186,7 +187,7 @@ def get_dates(filePath, fileName):
         dates["date_taken"] = getHeicExif(filePath)
     # for supported video files lets extract metatdata
     elif fileExtension in videoFormats:
-        dates["date_taken"] = getVideoExif(filePath)
+        dates["date_taken"] = getVideoExif(filePath) - UTC_OFFSET_TIMEDELTA
     #everything else just defaults to creation date
     else:
         logger.info(formatMessage("Information", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))
@@ -196,9 +197,6 @@ def get_dates(filePath, fileName):
         #invalid exif information. ignore it
         logger.warning(formatMessage("WARNING", "get_dates", filePath, "", "invalid exif information (1904/01/01). ignoring it", ""))  
         dates["date_taken"] = ""
-
-    # print(dates)
-    return dates
 
 def checkAndMoveFile(filePath, target):
     try:
@@ -679,4 +677,3 @@ if __name__ == "__main__":
     open(configInTargetDir, 'wb').write(open(configFile, 'rb').read())
 
     print("Find complete summary in log file - ", logFile, "\n")
-   
