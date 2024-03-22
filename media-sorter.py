@@ -159,7 +159,7 @@ def getVideoExif(filePath):
                 statsDict["totalMissingExif"] += 1
                 metadata = None
         if metadata:
-            date_taken = metadata.get('creation_date')
+            date_taken = metadata.get('creation_date') - UTC_OFFSET_TIMEDELTA
         else:
             logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))    
            
@@ -187,7 +187,7 @@ def get_dates(filePath, fileName):
         dates["date_taken"] = getHeicExif(filePath)
     # for supported video files lets extract metatdata
     elif fileExtension in videoFormats:
-        dates["date_taken"] = getVideoExif(filePath) - UTC_OFFSET_TIMEDELTA
+        dates["date_taken"] = getVideoExif(filePath)
     #everything else just defaults to creation date
     else:
         logger.info(formatMessage("Information", "get_dates", filePath, "", "EXIF NOT SUPPORTED"))
@@ -197,6 +197,9 @@ def get_dates(filePath, fileName):
         #invalid exif information. ignore it
         logger.warning(formatMessage("WARNING", "get_dates", filePath, "", "invalid exif information (1904/01/01). ignoring it", ""))  
         dates["date_taken"] = ""
+
+    # print(dates)
+    return dates
 
 def checkAndMoveFile(filePath, target):
     try:
@@ -298,7 +301,6 @@ def sortRecurringAndSpecialDayFiles(root, file, filePath, dates, isSpecialDay):
     dateList = recurringDays
     if(isSpecialDay):
         dateList = specialDays
-
     if dates["date_taken"] != "" :
         # we have exif data. We will only use this for our range comparision.
         # if exif date taken is present and does not fall in range, we don't use
@@ -430,7 +432,8 @@ def processMedia(configFile, useConfigFile):
             if os.path.isfile(filePath) and filePath != configFile:
                 statsDict["totalFilesProcessed"] += 1
                 dates = get_dates(filePath, file)
-                # print(dates)
+                #print(file)
+                #print(dates)
                 if useConfigFile :
                     if(moveBySpecialDay(root, file, filePath, dates)):
                         statsDict["totalSortedOnSpecialDate"] += 1
@@ -677,3 +680,4 @@ if __name__ == "__main__":
     open(configInTargetDir, 'wb').write(open(configFile, 'rb').read())
 
     print("Find complete summary in log file - ", logFile, "\n")
+   
