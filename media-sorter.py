@@ -159,7 +159,12 @@ def getVideoExif(filePath):
                 statsDict["totalMissingExif"] += 1
                 metadata = None
         if metadata:
-            date_taken = metadata.get('creation_date') - UTC_OFFSET_TIMEDELTA
+            date_taken = metadata.get('creation_date')
+            if date_taken == datetime.datetime(1904, 1, 1):
+                logger.warning(formatMessage("WARNING", "getVideoExif", filePath, "", "invalid exif information (1904/01/01). ignoring it", ""))
+                date_taken = ""
+            else:
+                date_taken = date_taken - UTC_OFFSET_TIMEDELTA
         else:
             logger.error(formatMessage("FAILURE",  filePath, "", "unable to read metadata"))    
            
@@ -197,8 +202,7 @@ def get_dates(filePath, fileName):
         #invalid exif information. ignore it
         logger.warning(formatMessage("WARNING", "get_dates", filePath, "", "invalid exif information (1904/01/01). ignoring it", ""))  
         dates["date_taken"] = ""
-
-    # print(dates)
+       
     return dates
 
 def checkAndMoveFile(filePath, target):
@@ -398,10 +402,10 @@ def sortByDate(root, file, filePath, dates):
         statsDict["totalProcessedOnExifDate"] += 1
     elif(dates["creation_date"] != ""): 
         moveFile(filePath, file, dates["creation_date"].strftime(dateYearMonthFormat), dates["creation_date"], False)
-        statsDict["totalProcessedOnModifiedDate"] += 1
+        statsDict["totalProcessedOnCreationDate"] += 1
     elif(dates["modification_date"] != ""): 
         moveFile(filePath, file, dates["modification_date"].strftime(dateYearMonthFormat),  dates["modification_date"])
-        statsDict["totalProcessedOnCreationDate"] += 1
+        statsDict["totalProcessedOnModifiedDate"] += 1
     else:
         logger.error(formatMessage("FAILURE", "sortByDate", filePath, "", "ERROR - CAN'T BE SORTED"))
         statsDict["totalFailures"] += 1
